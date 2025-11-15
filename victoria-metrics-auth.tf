@@ -6,10 +6,11 @@ resource "helm_release" "victoria_metrics_auth" {
   chart      = "victoria-metrics-auth"
   namespace  = "monitoring"
   #create_namespace = true
-  version = "0.19.7"
+  version = "0.19.9"
   depends_on = [
     helm_release.victoria_metrics_cluster,
     kubernetes_secret_v1.vm_basic_auth_vic,
+    kubernetes_secret_v1.vm_bearer_token_secret,
   ]
   values = [
     <<-EOT
@@ -40,34 +41,14 @@ config:
     - username: "${data.aws_ssm_parameter.username_vic.value}"
       password: "${data.aws_ssm_parameter.password_vic.value}"
       url_map:
-        - src_paths:
-            - "/select/.*"
+        - src_paths: ["/select/.*", "/admin/.*", "/vmui.*"]
           url_prefix: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481"
-        - src_paths:
-            - "/select"
+    - bearer_token: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+      url_map:
+        - src_paths: ["/select/.*"]
           url_prefix: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481"
-        - src_paths:
-            - "/vmui.*"
-          url_prefix: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481"  
-        - src_paths:
-            - "/insert/.*"
+        - src_paths: ["/insert/.*"]
           url_prefix: "http://vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480"
-        - src_paths:
-            - "/insert"
-          url_prefix: "http://vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480"
-        - src_paths:
-            - "/admin/.*"
-          url_prefix: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481"  
-  #unauthorized_user:
-  #  url_map:
-  #    #- src_paths:
-  #    #    - "/select/.*"
-  #    #  url_prefix: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481"
-  #    - src_paths:
-  #        - "/insert/.*"
-  #      url_prefix: "http://vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480"
 EOT
   ]
 }
-
-

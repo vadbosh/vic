@@ -19,4 +19,35 @@ resource "kubernetes_secret_v1" "vm_basic_auth_vic" {
   }
   type = "Opaque"
 }
+# ------------------------------------------------------------------
+data "aws_ssm_parameter" "vmagent_ingress_auth_ssm" {
+  name            = "/k8s/vmagent-ingress-auth-sandbox"
+  with_decryption = true
+}
 
+resource "kubernetes_secret_v1" "vmagent_basic_auth_secret" {
+  metadata {
+    name      = "vmagent-basic-auth"
+    namespace = "monitoring"
+  }
+  data = {
+    "auth" = data.aws_ssm_parameter.vmagent_ingress_auth_ssm.value
+  }
+  type = "Opaque"
+}
+# ------------------------------------------------------------------
+data "aws_ssm_parameter" "vmagent_bearer_token" {
+  name            = "/k8s/victoria-bearer-token-sandbox"
+  with_decryption = true
+}
+
+resource "kubernetes_secret_v1" "vm_bearer_token_secret" {
+  metadata {
+    name      = "vm-bearer-token-secret"
+    namespace = "monitoring"
+  }
+  data = {
+    token = data.aws_ssm_parameter.vmagent_bearer_token.value
+  }
+  type = "Opaque"
+}

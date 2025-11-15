@@ -6,15 +6,15 @@ resource "helm_release" "kube_state_metrics" {
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-state-metrics"
   namespace  = "monitoring"
-  version    = "6.3.0" # Рекомендуется закрепить версию
+  version    = "6.4.1"
   values = [
     <<-EOT
-nodeSelector:     
+nodeSelector:
   "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
 service:
-  annotations: 
+  annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"  
+    prometheus.io/port: "8080"
 collectors:
   - certificatesigningrequests
   - configmaps
@@ -55,9 +55,7 @@ resource "helm_release" "node_exporter" {
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-node-exporter"
   namespace  = "monitoring"
-  version    = "4.48.0" # Рекомендуется закрепить версию
-
-  # Node Exporter также создает ServiceMonitor по умолчанию.
+  version    = "4.49.1"
 
   values = [
     <<-EOT
