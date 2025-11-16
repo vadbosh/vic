@@ -14,9 +14,12 @@ vmstorage:
   replicaCount: 2
   extraArgs:
     memory.allowedPercent: "80"
-    dedup.minScrapeInterval: "30s"
+    dedup.minScrapeInterval: "60s"
     retentionPeriod: "90d"
     storage.minFreeDiskSpaceBytes: "1073741824" # <-- (1GB)
+    envflag.enable: "true"
+    envflag.prefix: VM_
+    loggerFormat: json
   affinity:
     podAntiAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
@@ -49,6 +52,7 @@ vmstorage:
       - ReadWriteOnce
     storageClassName: "ebs-sc-retain"
     size: 50Gi
+
 # --- vmselect ---
 vmselect:
   replicaCount: 2
@@ -57,11 +61,13 @@ vmselect:
     search.noStaleMarkers: "true"
     search.maxQueryLen: "65536"
     memory.allowedPercent: "80"
-    dedup.minScrapeInterval: "30s"
     search.maxUniqueTimeseries: "300000"
     search.maxSamplesPerQuery: "10000000"
     search.maxQueueDuration: "10s"
     search.maxConcurrentRequests: "20"
+    envflag.enable: "true"
+    envflag.prefix: VM_
+    loggerFormat: json
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -81,11 +87,17 @@ vmselect:
       cpu: "1000m"
       memory: "1Gi"
     limits:
-      cpu: "1000m"
-      memory: "1Gi"
+      cpu: "1500m"
+      memory: "2Gi"
+
 # --- vminsert ---
 vminsert:
   replicaCount: 2
+  extraArgs:
+    envflag.enable: "true"
+    envflag.prefix: VM_
+    loggerFormat: json
+    maxLabelsPerTimeseries: "30"  # safe cardinality explosion
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:

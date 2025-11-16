@@ -1,7 +1,7 @@
 # Файл: victoria-metrics-agent-token.tf
 
 resource "helm_release" "victoria_metrics_agent_token" {
-  name       = "vm-agent-token" # Уникальное имя релиза
+  name       = "vm-agent-token"
   repository = "https://victoriametrics.github.io/helm-charts/"
   chart      = "victoria-metrics-agent"
   namespace  = "monitoring"
@@ -43,7 +43,7 @@ resources:
     cpu: "200m"
     memory: "256Mi"
   limits:
-    cpu: "500m"
+    cpu: "1000m"
     memory: "512Mi"
 nodeSelector:
   "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
@@ -72,12 +72,13 @@ ingress:
     - hosts:
         - vic-agent.wellnessliving.com
       secretName: wellnessliving-com
-  
 
 config:
   global:
     scrape_interval: 30s
     scrape_timeout: 10s
+    external_labels:
+      cluster: ${data.terraform_remote_state.eks_core.outputs.cluster-name}
 
 remoteWrite:
   - url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/insert/0/prometheus/api/v1/write"
@@ -89,9 +90,20 @@ persistentVolume:
     - ReadWriteOnce
   size: "5Gi"
 
+extraScrapeConfigs:
+  - job_name: vicrotia-metrics-core-merics-${data.terraform_remote_state.eks_core.outputs.cluster-name}
+    static_configs:
+    - targets:
+      - vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480
+      - vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481
+      - vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+      - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
+      - vm-auth-victoria-metrics-auth.monitoring.svc:8427
+
 extraArgs:
   remoteWrite.maxDiskUsagePerURL: "4294967296" # <-- IF EXIST persistentVolume ~4GB
   #remoteWrite.maxDiskUsagePerURL: "1073741824"
+  promscrape.maxScrapeSize: "16777216"
   promscrape.dropOriginalLabels: false
   envflag.enable: "true"
   envflag.prefix: VM_
