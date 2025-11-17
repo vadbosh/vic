@@ -1,0 +1,21 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thoth-production-downpage 
+  namespace: thoth-production
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: thoth-production-downpage
+  ingress:
+  - fromEntities:
+    - cluster
+    - remote-node
+    - ingress
+    - world  
+    toPorts:
+    - ports:
+      - port: "80"
+        protocol: TCP
+      - port: "443"
+        protocol: TCP  

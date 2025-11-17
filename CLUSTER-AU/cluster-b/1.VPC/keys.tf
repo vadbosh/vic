@@ -1,0 +1,6 @@
+
+resource "aws_key_pair" "ssh_key_pair" {
+  key_name   = format("%s-%s", var.ssh_key_pair_name, var.cluster-name)
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDGsyKkTNYdfCjX0VuW4HVNmrDgrt4mJwu9TAXX59MN6LQdoKQMDJYWvTP1ibJpVZrLDVnMHOP6XQdl+8+f9H9ElmKRXuYKCT0FJzXx7WdIdMvR2J4L5UeWj7tObLrQKizZEsKYVTezCpUCgUrNyprHL1vbkM/SwX5ULQ9zlQyRmPr/vPKFniR1LbYNdzPFO4vnQs+mOaUmMyI7xXEor3gjtRYILLg79zJjL9NW+viLUlsMtOApfpwsqTLWBnVstLzMkgbeLUGXMEF1HYzY4ANOTsp1EYPnpBkNQhICqgKHgYy8U1abAIyQ5+1ZfQ8AeNL2uOv0TMGHYGzEPGZmYvMmSITGIXy+TgPs/4wrHvjs7lNsXmxmUBQXSZjfM8H1QfKafqNWTH1HrgwY+EkorB2o9Tfy7eyj9+w2MsFkCSwg+tPafFSXIqlfof4IpFAJhHSBOr6XEG8778KRGpq3uW97XzMQJAGawzh4maVsABpgRJkCGhHqEQJPLVVmBV/B3Ic="
+}
+

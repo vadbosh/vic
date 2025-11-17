@@ -1,0 +1,57 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thoth-monolith-demo
+  namespace: monolith-trunk
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: thoth-monolith-demo
+  ingress:
+  - fromEntities:
+    - cluster
+    - remote-node
+    - ingress
+    - world  
+    toPorts:
+    - ports:
+      - port: "80"
+        protocol: TCP
+      - port: "443"
+        protocol: TCP  
+  egress:
+  - toFQDNs:
+    - matchName: "demo.czv5nwocnwdl.us-east-1.rds.amazonaws.com"
+    - matchName: "geo-dev.czv5nwocnwdl.us-east-1.rds.amazonaws.com"
+    - matchName: "rdsdemo.czv5nwocnwdl.us-east-1.rds.amazonaws.com"
+    - matchName: "log-demostable.czv5nwocnwdl.us-east-1.rds.amazonaws.com"
+    - matchName: "demo-search-v15.czv5nwocnwdl.us-east-1.rds.amazonaws.com"
+    - matchName: "ws.demo.wellnessliving.com"
+    toPorts:
+    - ports:
+      - port: "3306"
+      - port: "44509"
+      - port: "5432"
+      - port: "50771"
+  - toFQDNs:
+    - matchName: "svn.thoth.wellnessliving.com"
+    toPorts:
+    - ports:
+      - port: "33804"
+  - toCIDR:
+    - 0.0.0.0/0 
+    toPorts:
+    - ports:
+      - port: "19321"
+      - port: "80"
+      - port: "443"
+  - toCIDR:
+    - 10.1.0.0/16
+    - 10.2.0.0/16
+    - 10.3.0.0/16
+    - 10.0.0.0/24
+    toPorts:
+    - ports:
+      - port: "33688"
+      - port: "59895"
+      - port: "50771"
