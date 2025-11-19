@@ -1,0 +1,116 @@
+server:
+  datasource:
+    url: "http://victoria-victoria-metrics-cluster-vmselect"
+  remote:
+    write:
+      url: "http://victoria-victoria-metrics-cluster-vminsert"
+    read:
+      url: "http://victoria-victoria-metrics-cluster-vmselect"
+
+  notifier:
+    alertmanager:
+      url: "http://victoria-victoria-metrics-alert-alertmanager:9093"
+  
+  extraArgs:
+    configCheckInterval: 60s
+
+  configMap: "vmalert-rules"
+
+  resources:
+    limits:
+      cpu: 30m
+      memory: 35Mi
+    requests:
+      cpu: 10m
+      memory: 25Mi
+
+alertmanager:
+  enabled: true
+  retention: 120h
+  listenAddress: "0.0.0.0:9093"
+  extraArgs: {}
+  envFrom: []
+  baseURL: ""
+  baseURLPrefix: ""
+  configMap: ""
+  webConfig: {}
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_wait: 20s
+      group_interval: 4m
+      repeat_interval: 4h
+      receiver: none
+      group_by: ['alertname', 'severity']
+      routes:
+        - match:
+            component: asd
+          receiver: slack-incidents
+        - match:
+            severity: critical
+          receiver: slack
+        - match:
+            severity: warning
+          receiver: slack
+       
+    receivers:
+      - name: none
+        webhook_configs: []
+      - name: slack
+        slack_configs:
+          - api_url: https://hooks.slack.com/services/xxxxxxx/xxxxxxx/xxxxxx
+            channel: 'monitoring'
+            send_resolved: true
+            text: '{{ template "slack.text" . }}'
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+            username: Sasd
+            icon_emoji: '{{ if eq .Status "firing" }}:fire:{{ else }}:tada:{{ end }}'
+            title: '{{ .CommonAnnotations.summary }}'
+            title_link: '{{ .CommonAnnotations.link }}'
+            pretext: '{{ if eq .Status "firing" }}<!here> {{ end }}'
+            fallback: '{{ .CommonAnnotations.summary }}'
+      - name: slack-incidents
+        slack_configs:
+          - api_url: https://hooks.slack.com/services/xxxxxx/xxxx/xxxx
+            channel: 'tower-incidents'
+            send_resolved: true
+            text: '{{ template "slack.text" . }}'
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+            username: ads
+            icon_emoji: '{{ if eq .Status "firing" }}:fire:{{ else }}:tada:{{ end }}'
+            title: '{{ .CommonAnnotations.summary }}'
+            title_link: '{{ .CommonAnnotations.link }}'
+            pretext: '{{ if eq .Status "firing" }}<!here> {{ end }}'
+            fallback: '{{ .CommonAnnotations.summary }}'
+          
+    templates:
+      - '/config/*.tmpl'
+   
+  templates:
+    test.tmpl: |-
+      {{ define "slack.text" }}
+        {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Status:* {{ .Status }}
+          *StartsAt:* {{ .StartsAt }}
+          *EndsAt:* {{ .EndsAt }}
+          *Source:* {{ .Labels.namespace }}/{{ .Labels.pod }}
+          *Details:*
+          {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }}
+            {{ end }}
+          {{ range .Annotations }}
+            {{ . }}
+          {{ end }}
+        {{ end }}
+      {{ end }}
+
+  resources:
+    limits:
+      cpu: 30m
+      memory: 30Mi
+    requests:
+      cpu: 10m
+      memory: 20Mi

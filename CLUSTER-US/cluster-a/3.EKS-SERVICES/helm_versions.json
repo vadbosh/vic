@@ -1,9 +1,0 @@
-{
-  "aws-load-balancer-controller": "1.13.4",
-  "cluster-autoscaler": "9.50.1",
-  "ingress-nginx": "4.13.2",
-  "metrics-server": "3.13.0",
-  "node-local-dns": "2.1.10",
-  "reflector": "9.1.31",
-  "reloader": "2.2.3"
-}

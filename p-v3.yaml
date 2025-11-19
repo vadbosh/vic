@@ -1,0 +1,144 @@
+---
+alertmanager:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      #kubernetes.io/ingress.class: nginx
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: grafana-nginx-pass-fk 
+      nginx.ingress.kubernetes.io/auth-realm: "Enter your grafana credentials"
+      nginx.ingress.kubernetes.io/proxy-body-size: 512m
+    hosts:
+      - alertm-fk.1worldonline.biz
+    path: /
+    tls:
+      - secretName: letsencrypt-1wo-biz-mon
+        hosts:
+        - alertm-fk.1worldonline.biz
+  config:
+    global:
+      resolve_timeout: 30s
+    route:
+      group_by: ['pod','alertname']  
+      group_wait: 5s
+      group_interval: 5m
+      repeat_interval: 20m
+      receiver: 1WO-WLEU-warning-condition 
+      routes:
+      - receiver: 1WO-WLEU-warning-condition
+        group_by: ['alertname', 'pod', 'image']
+        group_wait: 5s
+        matchers:
+          - severity=warning
+        continue: true
+      - receiver: 1WO-WLEU-PODS-condition 
+        group_by: ['pod']
+        matchers:
+          - podstat=~stoppod|startpod|resource_stats_mem|resource_stats_cpu
+        continue: true
+      - receiver: 1WO-WLEU-critical-condition
+        group_by: ['alertname', 'pod', 'image']
+        repeat_interval: 5m
+        matchers:
+          - severity=critical
+        continue: true
+      - receiver: 'null'
+        matchers:
+          - severity=~"info|none|"
+    receivers:
+    - name: 1WO-WLEU-PODS-condition
+      telegram_configs:
+      - send_resolved: false
+        bot_token: "1168791068:AAFcIYawXXO2ci1xQP4zhOf9c8y2pNlOk04"
+        chat_id: -1001889769446 
+        api_url: "https://api.telegram.org"
+        parse_mode: HTML
+        message: |
+          {{ range .Alerts }}
+              {{ if eq .Labels.podstat "startpod"}}&#128640;  <b>{{ .Labels.podstat | toUpper }}</b> {{ else }}&#128310;  <b>{{ .Labels.podstat | toUpper }}</b> {{ end }} 
+              &#9201; <b>StartAt:</b> {{ printf "%s\n" .StartsAt }}
+              {{- if .Annotations.description }}<b>Description:</b>  {{ printf "%s\n" .Annotations.description }}{{ end }}
+              {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
+              {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
+              {{- if .Labels.image }}<b>Image:</b> ● {{ printf "%s ●\n" .Labels.image }}{{ end }}
+              {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
+              {{- if .Labels.deployment }}<b>Deployment:</b>  {{ printf "%s\n" .Labels.deployment }}{{ end }}
+              {{- if .Labels.container }}<b>Container:</b>  {{ printf "%s\n" .Labels.container }}{{ end }}
+              {{- if .Labels.host }}<b>Host:</b>  {{ printf "%s\n" .Labels.host }}{{ end }}
+              {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
+              {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
+          {{ end }}
+    - name: 1WO-WLEU-critical-condition 
+      telegram_configs:
+      - send_resolved: true 
+        bot_token: "1168791068:AAFcIYawXXO2ci1xQP4zhOf9c8y2pNlOk04"
+        chat_id: -1001809019679
+        api_url: "https://api.telegram.org"
+        parse_mode: HTML
+        message: |
+          {{ if eq .Status "firing"}}&#128293;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ else }}&#127808;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ end }} 
+          {{ range .Alerts }}
+              &#9201; <b>StartAt:</b> {{ .StartsAt }}
+              {{ if ne .Status "firing"}}&#9201; <b>Ended:</b> {{ .EndsAt }}{{ end }}
+              ●  <b>Alert:</b>  {{ printf "%s  ●\n" .Labels.severity }}
+              {{- if .Annotations.description }}<b>Description:</b>  {{ printf "%s\n" .Annotations.description }}{{ end }}
+              {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
+              {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
+              {{- if .Labels.image }}<b>Image:</b> ● {{ printf "%s ●\n" .Labels.image }}{{ end }}
+              {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
+              {{- if .Labels.deployment }}<b>Deployment:</b>  {{ printf "%s\n" .Labels.deployment }}{{ end }}
+              {{- if .Labels.container }}<b>Container:</b>  {{ printf "%s\n" .Labels.container }}{{ end }}
+              {{- if .Labels.integration }}<b>Integration:</b>  {{ printf "%s\n" .Labels.integration }}{{ end }}
+              {{- if .Labels.horizontalpodautoscaler }}<b>HPautoscaler for:</b>  {{ printf "%s\n" .Labels.horizontalpodautoscaler }}{{ end }}
+              {{- if .Labels.host }}<b>Host:</b>  {{ printf "%s\n" .Labels.host }}{{ end }}
+              {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
+              {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
+          {{ end }}
+    - name: 1WO-WLEU-warning-condition
+      telegram_configs:
+      - send_resolved: true
+        bot_token: "1168791068:AAFcIYawXXO2ci1xQP4zhOf9c8y2pNlOk04"
+        chat_id: -1001571045090
+        api_url: "https://api.telegram.org"
+        parse_mode: HTML
+        message: |
+          {{ if eq .Status "firing"}}&#128681;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ else }}&#127808;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ end }} 
+          {{ range .Alerts }}
+              &#9201; <b>StartAt:</b> {{ .StartsAt }}
+              {{ if ne .Status "firing"}}&#9201; <b>Ended:</b> {{ .EndsAt }}{{ end }}
+              ●  <b>Alert:</b>  {{ printf "%s  ●\n" .Labels.severity }}
+              {{- if .Annotations.description }}<b>Description:</b> {{ printf "%s\n" .Annotations.description }}{{ end }}
+              {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
+              {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
+              {{- if .Labels.image }}<b>Image:</b> ● {{ printf "%s ●\n" .Labels.image }}{{ end }}
+              {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
+              {{- if .Labels.deployment }}<b>Deployment:</b>  {{ printf "%s\n" .Labels.deployment }}{{ end }}
+              {{- if .Labels.container }}<b>Container:</b>  {{ printf "%s\n" .Labels.container }}{{ end }}
+              {{- if .Labels.integration }}<b>Integration:</b>  {{ printf "%s\n" .Labels.integration }}{{ end }}
+              {{- if .Labels.horizontalpodautoscaler }}<b>HPautoscaler for:</b>  {{ printf "%s\n" .Labels.horizontalpodautoscaler }}{{ end }}
+              {{- if .Labels.host }}<b>Host:</b>  {{ printf "%s\n" .Labels.host }}{{ end }}
+              {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
+              {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}  
+          {{ end }}
+    - name: 'null'
+  alertmanagerSpec:
+    resources:
+       limits:
+         cpu: 500m
+         memory: 256Mi
+       requests:
+         cpu: 250m
+         memory: 128Mi
+    nodeSelector:  { "eks-cluster/nodegroup": "monitoring", }
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: efs-sc # !!!
+          accessModes: ["ReadWriteOnce"] # !!!
+          #resources:
+          #  requests:
+          #    storage: 30Gi
+          selector:  # !!!
+            matchLabels:  # !!!
+              app.kubernetes.io/name: alertmanager  # !!!
