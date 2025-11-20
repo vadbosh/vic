@@ -1,21 +1,95 @@
----
-alertmanager:
+
+resource "kubernetes_config_map_v1" "vmalert_rules" {
+  metadata {
+    name      = "vmalert-rules"
+    namespace = "monitoring"
+  }
+  data = {
+    "alert-rules.yaml" = file("${path.module}/alert-rules/alerts.yaml")
+  }
+}
+
+resource "helm_release" "victoria_metrics_alert" {
+  name       = "vm-alert"
+  repository = "https://victoriametrics.github.io/helm-charts/"
+  chart      = "victoria-metrics-alert"
+  namespace  = "monitoring"
+  version    = "0.26.6"
+  timeout    = "120"
+
+  depends_on = [
+    helm_release.victoria_metrics_cluster,
+    helm_release.victoria_metrics_auth,
+    kubernetes_config_map_v1.vmalert_rules,
+    kubernetes_secret_v1.vm_bearer_token_secret
+  ]
+
+
+  values = [
+    <<-EOT
+server:
+  #name: vmalert
+  datasource:
+    #url: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481/select/0/prometheus/"
+    url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/select/0/prometheus"
+  remote:
+    write:
+      #url: "http://vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480/insert/0/prometheus/api/v1/write"
+      url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/insert/0/prometheus"
+      #url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/insert/0/prometheus/api/v1/write"
+    read:
+      #url: "http://vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481/select/0/prometheus/"
+      url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/select/0/prometheus"
+  notifier:
+    alertmanager:
+      url: "http://vm-alert-victoria-metrics-alert-alertmanager.monitoring.svc:9093"
+
+  configMap: "vmalert-rules"
+
+  extraArgs:
+    configCheckInterval: 60s
+    datasource.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+    remoteWrite.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+    remoteRead.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  nodeSelector:
+    "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
+  
   ingress:
     enabled: true
-    ingressClassName: nginx
+    ingressClassName: "shared-victoria"
     annotations:
-      #kubernetes.io/ingress.class: nginx
-      nginx.ingress.kubernetes.io/auth-type: basic
-      nginx.ingress.kubernetes.io/auth-secret: grafana-nginx-pass-fk 
-      nginx.ingress.kubernetes.io/auth-realm: "Enter your grafana credentials"
-      nginx.ingress.kubernetes.io/proxy-body-size: 512m
+      nginx.ingress.kubernetes.io/auth-type: "basic"
+      nginx.ingress.kubernetes.io/auth-secret: "vmagent-basic-auth" 
+      nginx.ingress.kubernetes.io/auth-realm: "Auth"
+    pathType: Prefix
     hosts:
-      - alertm-fk.1worldonline.biz
-    path: /
+      - name: vmalert.wellnessliving.com
+        path: /
+        port: http
     tls:
-      - secretName: letsencrypt-1wo-biz-mon
-        hosts:
-        - alertm-fk.1worldonline.biz
+      - hosts:
+          - vmalert.wellnessliving.com
+        secretName: wellnessliving-com
+
+alertmanager:
+  enabled: true
+  retention: 120h
+  listenAddress: "0.0.0.0:9093"
+  extraArgs: {}
+  envFrom: []
+  baseURL: ""
+  baseURLPrefix: ""
+  configMap: ""
+  webConfig: {}
   config:
     global:
       resolve_timeout: 30s
@@ -24,20 +98,20 @@ alertmanager:
       group_wait: 5s
       group_interval: 5m
       repeat_interval: 20m
-      receiver: 1WO-WLEU-warning-condition 
+      receiver: WL-warning-condition 
       routes:
-      - receiver: 1WO-WLEU-warning-condition
+      - receiver: WL-warning-condition
         group_by: ['alertname', 'pod', 'image']
         group_wait: 5s
         matchers:
           - severity=warning
         continue: true
-      - receiver: 1WO-WLEU-PODS-condition 
+      - receiver: WL-PODS-condition 
         group_by: ['pod']
         matchers:
           - podstat=~stoppod|startpod|resource_stats_mem|resource_stats_cpu
         continue: true
-      - receiver: 1WO-WLEU-critical-condition
+      - receiver: WL-critical-condition
         group_by: ['alertname', 'pod', 'image']
         repeat_interval: 5m
         matchers:
@@ -46,12 +120,13 @@ alertmanager:
       - receiver: 'null'
         matchers:
           - severity=~"info|none|"
+    
     receivers:
-    - name: 1WO-WLEU-PODS-condition
+    - name: WL-PODS-condition
       telegram_configs:
       - send_resolved: false
-        bot_token: "1168791068:AAFcIYawXXO2ci1xQP4zhOf9c8y2pNlOk04"
-        chat_id: -1001889769446 
+        bot_token: "8356221553:AAGINYWYpGyO4OkTNFVMXEjIJh9CwUEPjPc"
+        chat_id: -5079754285
         api_url: "https://api.telegram.org"
         parse_mode: HTML
         message: |
@@ -69,11 +144,12 @@ alertmanager:
               {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
               {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
           {{ end }}
-    - name: 1WO-WLEU-critical-condition 
+    
+    - name: WL-critical-condition 
       telegram_configs:
       - send_resolved: true 
-        bot_token: "1168791068:AAFcIYawXXO2ci1xQP4zhOf9c8y2pNlOk04"
-        chat_id: -1001809019679
+        bot_token: "8356221553:AAGINYWYpGyO4OkTNFVMXEjIJh9CwUEPjPc"
+        chat_id: -5079754285
         api_url: "https://api.telegram.org"
         parse_mode: HTML
         message: |
@@ -95,11 +171,12 @@ alertmanager:
               {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
               {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
           {{ end }}
-    - name: 1WO-WLEU-warning-condition
+    
+    - name: WL-warning-condition
       telegram_configs:
       - send_resolved: true
-        bot_token: "1168791068:AAFcIYawXXO2ci1xQP4zhOf9c8y2pNlOk04"
-        chat_id: -1001571045090
+        bot_token: "8356221553:AAGINYWYpGyO4OkTNFVMXEjIJh9CwUEPjPc"
+        chat_id: -5079754285
         api_url: "https://api.telegram.org"
         parse_mode: HTML
         message: |
@@ -121,24 +198,36 @@ alertmanager:
               {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
               {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}  
           {{ end }}
+    
     - name: 'null'
-  alertmanagerSpec:
-    resources:
-       limits:
-         cpu: 500m
-         memory: 256Mi
-       requests:
-         cpu: 250m
-         memory: 128Mi
-    nodeSelector:  { "eks-cluster/nodegroup": "monitoring", }
-    storage:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: efs-sc # !!!
-          accessModes: ["ReadWriteOnce"] # !!!
-          #resources:
-          #  requests:
-          #    storage: 30Gi
-          selector:  # !!!
-            matchLabels:  # !!!
-              app.kubernetes.io/name: alertmanager  # !!!
+  
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+  nodeSelector:
+    "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
+  ingress:
+    enabled: true
+    ingressClassName: "shared-victoria"
+    annotations:
+      nginx.ingress.kubernetes.io/auth-type: "basic"
+      nginx.ingress.kubernetes.io/auth-secret: "vmagent-basic-auth"
+      nginx.ingress.kubernetes.io/auth-realm: "Auth"
+    pathType: Prefix
+    hosts:
+      - name: alertmanager.wellnessliving.com
+        path: /
+        port: http
+    tls:
+      - hosts:
+          - alertmanager.wellnessliving.com
+        secretName: wellnessliving-com
+
+EOT
+  ]
+}
+
