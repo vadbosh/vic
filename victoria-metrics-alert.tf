@@ -210,6 +210,7 @@ alertmanager:
       memory: "256Mi"
   nodeSelector:
     "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
+
   ingress:
     enabled: true
     ingressClassName: "shared-victoria"
@@ -217,16 +218,17 @@ alertmanager:
       nginx.ingress.kubernetes.io/auth-type: "basic"
       nginx.ingress.kubernetes.io/auth-secret: "vmagent-basic-auth"
       nginx.ingress.kubernetes.io/auth-realm: "Auth"
+      nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     pathType: Prefix
     hosts:
       - name: alertmanager.wellnessliving.com
-        path: /
-        port: http
+        path:
+          - /
+        port: web
     tls:
       - hosts:
           - alertmanager.wellnessliving.com
         secretName: wellnessliving-com
-
 EOT
   ]
 }
