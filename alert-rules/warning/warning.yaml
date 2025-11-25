@@ -1,0 +1,12 @@
+groups:
+  - name: routing-warning-rules
+    rules:
+      - alert: TestRoutingWarning
+        expr: vector(1)
+        for: 0m
+        labels:
+          severity: warning
+          alertname: TestWarning
+        annotations:
+          summary: "Тест маршрута WARNING"
+          description: "NEW warningZ Этот алерт должен уйти в ресивер WL-warning-condition."

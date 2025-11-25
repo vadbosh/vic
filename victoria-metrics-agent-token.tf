@@ -1,11 +1,10 @@
-# Файл: victoria-metrics-agent-token.tf
 
 resource "helm_release" "victoria_metrics_agent_token" {
   name       = "vm-agent-token"
   repository = "https://victoriametrics.github.io/helm-charts/"
   chart      = "victoria-metrics-agent"
   namespace  = "monitoring"
-  version    = "0.26.4"
+  version    = "0.26.5"
   timeout    = "120"
 
   depends_on = [
@@ -56,7 +55,7 @@ ingress:
   ingressClassName: "shared-victoria"
   annotations:
     nginx.ingress.kubernetes.io/auth-type: "basic"
-    nginx.ingress.kubernetes.io/auth-secret: "vmagent-basic-auth"
+    nginx.ingress.kubernetes.io/auth-secret: "${local.basic_auth_secret.name}"
     nginx.ingress.kubernetes.io/auth-realm: "Authentication Required - VM-Agent UI"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/configuration-snippet: |
@@ -114,7 +113,7 @@ env:
   - name: VM_BEARER_TOKEN
     valueFrom:
       secretKeyRef:
-        name: vm-bearer-token-secret
+        name: "${local.bearer_token_secret.name}"
         key: token
 
 EOT

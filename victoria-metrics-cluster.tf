@@ -4,7 +4,7 @@ resource "helm_release" "victoria_metrics_cluster" {
   chart      = "victoria-metrics-cluster"
   namespace  = "monitoring"
   #create_namespace = true
-  version = "0.29.4" # Замените на актуальную версию
+  version = "0.29.5" # Замените на актуальную версию
   timeout = "200"
 
   values = [

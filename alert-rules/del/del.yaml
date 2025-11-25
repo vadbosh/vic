@@ -1,0 +1,14 @@
+groups:
+  - name: routing-del-rules
+    rules:
+      # 3. INFO (Должен попасть в null)
+      # Ожидание: Тишина. В Telegram ничего прийти НЕ должно.
+      - alert: TestRoutingInfo
+        expr: vector(1)
+        for: 0m
+        labels:
+          severity: info
+          alertname: TestInfo
+        annotations:
+          summary: "Тест маршрута INFO"
+          description: "MUST BE DEL Этот алерт должен быть отброшен (receiver: null)."

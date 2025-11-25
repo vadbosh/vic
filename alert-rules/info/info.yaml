@@ -1,0 +1,30 @@
+groups:
+  - name: podstat-info-rules
+    rules:
+      # 1. ТЕСТ ЗАПУСКА ПОДА (Start)
+      # Ожидание: Эмодзи ракеты 🚀 (WL-PODS-condition)
+      - alert: TestPodStart
+        expr: vector(1)
+        for: 0m
+        labels:
+          # Этот лейбл направит алерт в нужный маршрут
+          podstat: startpod
+          # Доп. лейблы для красоты сообщения
+          pod: test-app-pod-xyz
+          namespace: default
+          image: nginx:latest
+        annotations:
+          description: "NEW ### Симуляция запуска пода (StartPod)"
+
+      # 2. ТЕСТ ОСТАНОВКИ ПОДА (Stop)
+      # Ожидание: Эмодзи ромба 🔶 (WL-PODS-condition)
+      - alert: TestPodStop
+        expr: vector(1)
+        for: 0m
+        labels:
+          # Этот лейбл тоже направит в WL-PODS-condition, но сработает условие {{ else }}
+          podstat: stoppod
+          pod: old-app-pod-123
+          namespace: backend
+        annotations:
+          description: "NEW ### Симуляция остановки пода (StopPod)"            

@@ -27,7 +27,7 @@ data "aws_ssm_parameter" "vmagent_ingress_auth_ssm" {
 
 resource "kubernetes_secret_v1" "vmagent_basic_auth_secret" {
   metadata {
-    name      = "vmagent-basic-auth"
+    name      = local.basic_auth_secret.name
     namespace = "monitoring"
   }
   data = {
@@ -43,7 +43,7 @@ data "aws_ssm_parameter" "vmagent_bearer_token" {
 
 resource "kubernetes_secret_v1" "vm_bearer_token_secret" {
   metadata {
-    name      = "vm-bearer-token-secret"
+    name      = local.bearer_token_secret.name
     namespace = "monitoring"
   }
   data = {
