@@ -1,0 +1,11 @@
+groups:
+- name: debug-connection
+  rules:
+  - alert: ConnectionCheck
+    # Этот запрос заставит vmalert пойти в базу.
+    # Если база ответит данными - алерт сработает.
+    # Если база недоступна/токен кривой - в логах будет ERROR.
+    expr: (sum(rate(nginx_ingress_controller_requests{status=~"5.."}[2m])) / (sum(rate(nginx_ingress_controller_requests[22m])) * 100)) =~ 0.01
+    #expr: 1 > 0
+    labels:
+      severity: debug

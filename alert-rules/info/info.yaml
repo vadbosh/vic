@@ -27,4 +27,4 @@ groups:
           pod: old-app-pod-123
           namespace: backend
         annotations:
-          description: "NEW ### Симуляция остановки пода (StopPod)"            
+          description: "NEW ### Симуляция остановки пода (StopPod)"

@@ -1,0 +1,12 @@
+groups:
+  - name: critical-rules-real
+    rules:
+      - alert: CPUUsageReal
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 30
+        for: 1m
+        labels:
+          severity: critical
+          alertname: CPUUsageReal
+        annotations:
+          summary: "Критическая загрузка CPU"
+          description: "NEW CPU CRITICAL - Загрузка CPU превышает 90% на инстансе {{ $labels.instance }}"

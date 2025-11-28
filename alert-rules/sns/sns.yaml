@@ -9,4 +9,4 @@ groups:
           alertname: TestCriticalSNS
         annotations:
           summary: "Тест маршрута CRITICAL4SNS (SNS)"
-          description: "EMAIL critical4sns Этот алерт должен уйти в ресивер WL-critical4sns-condition (SNS Email/SMS)."      
+          description: "EMAIL critical4sns Этот алерт должен уйти в ресивер WL-critical4sns-condition (SNS Email/SMS)."

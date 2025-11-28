@@ -97,7 +97,8 @@ server:
     datasource.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
     remoteWrite.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
     remoteRead.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
-
+    rule: |
+      /etc/vm/rules/**/*.yaml
 
   configMaps:
     - vmalert-rules-critical
@@ -141,10 +142,6 @@ server:
     - name: rules-warning
       mountPath: /etc/vm/rules/warning
       readOnly: true
-
-  extraArgs:
-    rule: |
-      /etc/vm/rules/**/*.yaml
 
   resources:
     requests:
