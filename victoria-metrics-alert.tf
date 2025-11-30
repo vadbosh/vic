@@ -94,6 +94,7 @@ server:
 
   extraArgs:
     configCheckInterval: 60s
+    external.alert.source: "${data.terraform_remote_state.eks_core.outputs.cluster-name}"
     datasource.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
     remoteWrite.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
     remoteRead.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"

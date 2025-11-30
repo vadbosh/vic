@@ -107,6 +107,9 @@ extraArgs:
   envflag.enable: "true"
   envflag.prefix: VM_
   loggerFormat: json
+  remoteWrite.maxBlockSize: "4194304"
+  remoteWrite.showURL: "true"
+  promscrape.suppressScrapeErrors: "true"
   remoteWrite.bearerToken: "$(VM_BEARER_TOKEN)"
 
 env:

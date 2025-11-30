@@ -11,11 +11,11 @@ resource "helm_release" "victoria_metrics_cluster" {
     <<-EOT
 # --- vmstorage ---
 vmstorage:
-  replicaCount: 2
+  replicaCount: 3
   extraArgs:
     memory.allowedPercent: "80"
-    dedup.minScrapeInterval: "60s"
-    retentionPeriod: "90d"
+    dedup.minScrapeInterval: "30s"
+    retentionPeriod: "33d"
     storage.minFreeDiskSpaceBytes: "1073741824" # <-- (1GB)
     envflag.enable: "true"
     envflag.prefix: VM_
@@ -30,13 +30,16 @@ vmstorage:
                 values:
                   - vmstorage
           topologyKey: "kubernetes.io/hostname"
-        - labelSelector:
-            matchExpressions:
-              - key: app
-                operator: In
-                values:
-                  - vmstorage
-          topologyKey: "topology.kubernetes.io/zone"
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - vmstorage
+            topologyKey: "topology.kubernetes.io/zone"  
   nodeSelector:
     "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
   resources:
@@ -94,6 +97,7 @@ vmselect:
 vminsert:
   replicaCount: 2
   extraArgs:
+    replicationFactor: "3"
     envflag.enable: "true"
     envflag.prefix: VM_
     loggerFormat: json
