@@ -88,18 +88,28 @@ server:
       url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/select/0/prometheus"
   notifier:
     alertmanager:
-      url: "http://vm-alert-victoria-metrics-alert-alertmanager.monitoring.svc:9093"
+      url: "http://vm-alert-victoria-metrics-alert-alertmanager:9093"
 
   #configMap: "vmalert-rules"
+
+  env:
+    - name: DATASOURCE_BEARER_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: "${local.bearer_token_secret.name}"
+          key: token
 
   extraArgs:
     configCheckInterval: 60s
     external.alert.source: "${data.terraform_remote_state.eks_core.outputs.cluster-name}"
-    datasource.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
-    remoteWrite.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
-    remoteRead.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+    datasource.bearerToken: "$(DATASOURCE_BEARER_TOKEN)"
+    remoteWrite.bearerToken: "$(DATASOURCE_BEARER_TOKEN)"
+    remoteRead.bearerToken: "$(DATASOURCE_BEARER_TOKEN)"
+    #datasource.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+    #remoteWrite.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
+    #remoteRead.bearerToken: "${data.aws_ssm_parameter.vmagent_bearer_token.value}"
     rule: |
-      /etc/vm/rules/**/*.yaml
+      /etc/vm/rules/*/*.yaml
 
   configMaps:
     - vmalert-rules-critical

@@ -93,11 +93,26 @@ extraScrapeConfigs:
   - job_name: vicrotia-metrics-core-merics-${data.terraform_remote_state.eks_core.outputs.cluster-name}
     static_configs:
     - targets:
+      - vm-cluster-victoria-metrics-cluster-vmstorage-0.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+      - vm-cluster-victoria-metrics-cluster-vmstorage-1.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+      - vm-cluster-victoria-metrics-cluster-vmstorage-2.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+      labels:
+        app: vmstorage
+    - targets:
       - vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480
       - vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481
-      - vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
       - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
       - vm-auth-victoria-metrics-auth.monitoring.svc:8427
+
+#extraScrapeConfigs:
+#  - job_name: vicrotia-metrics-core-merics-${data.terraform_remote_state.eks_core.outputs.cluster-name}
+#    static_configs:
+#    - targets:
+#      - vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480
+#      - vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481
+#      - vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+#      - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
+#      - vm-auth-victoria-metrics-auth.monitoring.svc:8427
 
 extraArgs:
   remoteWrite.maxDiskUsagePerURL: "4294967296" # <-- IF EXIST persistentVolume ~4GB

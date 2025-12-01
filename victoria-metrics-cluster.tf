@@ -15,6 +15,7 @@ vmstorage:
   extraArgs:
     memory.allowedPercent: "80"
     dedup.minScrapeInterval: "30s"
+    search.maxUniqueTimeseries: "10000000"
     retentionPeriod: "33d"
     storage.minFreeDiskSpaceBytes: "1073741824" # <-- (1GB)
     envflag.enable: "true"
@@ -60,6 +61,8 @@ vmstorage:
 vmselect:
   replicaCount: 2
   extraArgs:
+    dedup.minScrapeInterval: "30s"
+    search.treatDotsAsIsInRegexps: "false"
     search.logSlowQueryDuration: "10s"
     search.noStaleMarkers: "true"
     search.maxQueryLen: "65536"
@@ -98,6 +101,7 @@ vminsert:
   replicaCount: 2
   extraArgs:
     replicationFactor: "3"
+    disableRerouting: "true"
     envflag.enable: "true"
     envflag.prefix: VM_
     loggerFormat: json
