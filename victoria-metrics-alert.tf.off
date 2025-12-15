@@ -252,39 +252,43 @@ alertmanager:
         topic_arn: "${data.aws_sns_topic.existing_sns.arn}"
         sigv4:
           region: "${data.terraform_remote_state.network.outputs.region}"
-        subject: "ALERT: {{ .GroupLabels.alertname }}" 
+        subject: "🚨 CRITICAL SNS ALERT: {{ .GroupLabels.alertname }}"
         message: |
-          Status: {{ if eq .Status "firing"}}🔥 {{ .Status | toUpper }} {{ .CommonLabels.alertname }} {{ else }}🍀 {{ .Status | toUpper }} {{ .CommonLabels.alertname }}{{ end }}
+          ═══════════════════════════════════════
+          🚨 CRITICAL ALERT (SNS)
+          ═══════════════════════════════════════
+
+          Status: {{ .Status | toUpper }}
           Alert Name: {{ .GroupLabels.alertname }}
+          Severity: CRITICAL4SNS
           Cluster: ${data.terraform_remote_state.eks_core.outputs.cluster-name}
+          Environment: sandbox
 
           {{ range .Alerts }}
           ───────────────────────────────────────
           ⏰ Started: {{ .StartsAt }}
           {{ if ne .Status "firing" }}⏰ Ended: {{ .EndsAt }}{{ end }}
 
-          📝 Summary:
-          {{ .Annotations.summary }}
-
           📝 Description:
           {{ .Annotations.description }}
 
           🔍 Details:
-          {{- if .Labels.instance }} • Instance: {{ .Labels.instance }}{{ end }}
-          {{- if .Labels.namespace }} • Namespace:  {{ printf "%s\n" .Labels.namespace }}{{ end }}
-          {{- if .Labels.pod }} • Pod:  {{ printf "%s\n" .Labels.pod }}{{ end }}
-          {{- if .Labels.exported_namespace }} • Namespace:  {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
-          {{- if .Labels.exported_pod }} • Pod:  {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
-          {{- if .Labels.deployment }} • Deployment: {{ .Labels.deployment }}{{ end }}
-          {{- if .Labels.container }} • Container: {{ .Labels.container }}{{ end }}
-          {{- if .Labels.node }} • Node: {{ .Labels.node }}{{ end }}
-          {{- if .Labels.image }} • Image: {{ .Labels.image }}{{ end }}
+          {{- if .Labels.instance }}  • Instance: {{ .Labels.instance }}{{ end }}
+          {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
+          {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
+          {{- if .Labels.exported_namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
+          {{- if .Labels.exported_pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
+          {{- if .Labels.deployment }}  • Deployment: {{ .Labels.deployment }}{{ end }}
+          {{- if .Labels.container }}  • Container: {{ .Labels.container }}{{ end }}
+          {{- if .Labels.node }}  • Node: {{ .Labels.node }}{{ end }}
+          {{- if .Labels.image }}  • Image: {{ .Labels.image }}{{ end }}
           {{ end }}
 
           ═══════════════════════════════════════
         attributes:
           cluster: "${data.terraform_remote_state.eks_core.outputs.cluster-name}"
           severity: "critical4sns"
+          environment: "sandbox"
 
     # СУЩЕСТВУЮЩИЙ RECEIVER: critical -> Telegram
     - name: WL-critical-condition
@@ -301,7 +305,6 @@ alertmanager:
               &#9201; <b>StartAt:</b> {{ .StartsAt }}
               {{ if ne .Status "firing"}}&#9201; <b>Ended:</b> {{ .EndsAt }}{{ end }}
               ●  <b>Alert:</b>  {{ printf "%s  ●\n" .Labels.severity }}
-              {{- if .Annotations.summary }}<b>Summary:</b>  {{ printf "%s\n" .Annotations.summary }}{{ end }}
               {{- if .Annotations.description }}<b>Description:</b>  {{ printf "%s\n" .Annotations.description }}{{ end }}
               {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
               {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
@@ -330,7 +333,6 @@ alertmanager:
           {{ range .Alerts }}
               {{ if eq .Labels.podstat "startpod"}}&#128640;  <b>{{ .Labels.podstat | toUpper }}</b> {{ else }}&#128310;  <b>{{ .Labels.podstat | toUpper }}</b> {{ end }}
               &#9201; <b>StartAt:</b> {{ printf "%s\n" .StartsAt }}
-              {{- if .Annotations.summary }}<b>Summary:</b>  {{ printf "%s\n" .Annotations.summary }}{{ end }}
               {{- if .Annotations.description }}<b>Description:</b>  {{ printf "%s\n" .Annotations.description }}{{ end }}
               {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
               {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
@@ -359,7 +361,6 @@ alertmanager:
               &#9201; <b>StartAt:</b> {{ .StartsAt }}
               {{ if ne .Status "firing"}}&#9201; <b>Ended:</b> {{ .EndsAt }}{{ end }}
               ●  <b>Alert:</b>  {{ printf "%s  ●\n" .Labels.severity }}
-              {{- if .Annotations.summary }}<b>Summary:</b>  {{ printf "%s\n" .Annotations.summary }}{{ end }}
               {{- if .Annotations.description }}<b>Description:</b> {{ printf "%s\n" .Annotations.description }}{{ end }}
               {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
               {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}

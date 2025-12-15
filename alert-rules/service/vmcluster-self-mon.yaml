@@ -1,0 +1,71 @@
+groups:
+  - name: VictoriaMetrics.self.mon.rules
+    rules:
+
+      # -------------------------------------------------------------
+      # 1. AVAILABILITY & RESTARTS
+      # -------------------------------------------------------------
+
+      # OPTIMIZED QUERY: Detects disappearance of any VM component
+      # Logic: "Show me instances that existed 10m ago but do not exist now"
+      - alert: VictoriaMetricsInstanceDisappeared
+        expr: |
+          up{job=~"vmagent|vmauth|vminsert|vmselect|vmstorage"} offset 10m
+          unless
+          up{job=~"vmagent|vmauth|vminsert|vmselect|vmstorage"}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} ({{ $labels.job }}) has disappeared"
+          description: "The instance was present 10 minutes ago but is missing now. Check if the service/pod crashed."
+
+      # Component is discovered (exists in SD) but not responding (up=0)
+      - alert: VictoriaMetricsTargetDown
+        expr: up{job=~"vmagent|vmauth|vminsert|vmselect|vmstorage"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.instance }} is down"
+          description: "Target is discovered but cannot be scraped. Check network connectivity or service status."
+
+      # Too many restarts (CrashLoopBackOff detection)
+      - alert: VictoriaMetricsTooManyRestarts
+        expr: changes(process_start_time_seconds{job=~"vmagent|vmauth|vminsert|vmselect|vmstorage"}[15m]) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: "Instance {{ $labels.instance }} restarting too often"
+          description: "The service has restarted more than twice in the last 15 minutes."
+
+      # -------------------------------------------------------------
+      # 2. VMAGENT (Scraping Health)
+      # -------------------------------------------------------------
+
+      # Scrapes are explicitly failing (connection refused, timeouts, etc.)
+      # Using vm_promscrape_scrapes_failed_total as requested
+      - alert: VMAgentScrapeFailed
+        expr: rate(vm_promscrape_scrapes_failed_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "vmagent scrapes are failing"
+          description: "vmagent is encountering errors while scraping targets. Check logs for specific target errors."
+
+      # -------------------------------------------------------------
+      # 3. VMSTORAGE (Data Ingestion Health)
+      # -------------------------------------------------------------
+
+      # CRITICAL: No data is being added to storage
+      # We use vm_rows_added_to_storage_total. If rate is 0, ingestion stopped.
+      # Note: We check if it WAS > 0 before (via offset) to avoid alerting on empty new clusters, 
+      # but simpler is just checking if rate is 0 for existing storage nodes.
+      - alert: VMStorageIngestionStopped
+        expr: rate(vm_rows_added_to_storage_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "vmstorage is not ingesting data"
+          description: "The rate of rows added to storage is 0. Data ingestion has stopped completely."

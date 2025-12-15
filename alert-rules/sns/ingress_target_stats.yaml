@@ -1,0 +1,17 @@
+groups:
+  - name: ingress-target-stats
+    rules:
+      # 1. Target Response Time (P95 Latency)
+      # Logic: Calculates the 95th percentile of request duration per service over 5 minutes.
+      # Equivalent to AWS ALB "Target Response Time".
+      - alert: NginxTargetResponseTimeHigh
+        expr: histogram_quantile(0.95, sum by (le, namespace, host) (rate(nginx_ingress_controller_request_duration_seconds_bucket{host!="_"}[5m]))) > 0.3
+        for: 0m
+        labels:
+          severity: critical4sns
+          type: backend_stats
+        annotations:
+          summary: "High Latency: {{ $labels.namespace }}/{{ $labels.host }}"
+          description: "{{ $labels.host }} The P95 response time is {{ $value | humanizeDuration }} over the last 5 minutes (threshold: >300ms)."
+
+            

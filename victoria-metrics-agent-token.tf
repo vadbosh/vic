@@ -4,7 +4,7 @@ resource "helm_release" "victoria_metrics_agent_token" {
   repository = "https://victoriametrics.github.io/helm-charts/"
   chart      = "victoria-metrics-agent"
   namespace  = "monitoring"
-  version    = "0.26.5"
+  version    = "0.27.1"
   timeout    = "120"
 
   depends_on = [
@@ -90,19 +90,43 @@ persistentVolume:
   size: "5Gi"
 
 extraScrapeConfigs:
-  - job_name: vicrotia-metrics-core-merics-${data.terraform_remote_state.eks_core.outputs.cluster-name}
+  - job_name: vmstorage
     static_configs:
     - targets:
       - vm-cluster-victoria-metrics-cluster-vmstorage-0.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
       - vm-cluster-victoria-metrics-cluster-vmstorage-1.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
       - vm-cluster-victoria-metrics-cluster-vmstorage-2.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
-      labels:
-        app: vmstorage
+  - job_name: vminsert
+    static_configs:
     - targets:
       - vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480
+  - job_name: vmselect
+    static_configs:
+    - targets:
       - vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481
-      - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
+  #- job_name: vmagent-svc
+  #  static_configs:
+  #  - targets:
+  #    - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
+  - job_name: vmauth
+    static_configs:
+    - targets:
       - vm-auth-victoria-metrics-auth.monitoring.svc:8427
+
+#extraScrapeConfigs:
+#  - job_name: vicrotia-metrics-core-merics-${data.terraform_remote_state.eks_core.outputs.cluster-name}
+#    static_configs:
+#    - targets:
+#      - vm-cluster-victoria-metrics-cluster-vmstorage-0.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+#      - vm-cluster-victoria-metrics-cluster-vmstorage-1.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+#      - vm-cluster-victoria-metrics-cluster-vmstorage-2.vm-cluster-victoria-metrics-cluster-vmstorage.monitoring.svc:8482
+#      labels:
+#        app: vmstorage
+#    - targets:
+#      - vm-cluster-victoria-metrics-cluster-vminsert.monitoring.svc:8480
+#      - vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481
+#      - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
+#      - vm-auth-victoria-metrics-auth.monitoring.svc:8427
 
 #extraScrapeConfigs:
 #  - job_name: vicrotia-metrics-core-merics-${data.terraform_remote_state.eks_core.outputs.cluster-name}

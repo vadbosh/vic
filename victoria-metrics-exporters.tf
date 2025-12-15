@@ -4,7 +4,7 @@ resource "helm_release" "node_exporter" {
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-node-exporter"
   namespace  = "monitoring"
-  version    = "4.49.1"
+  version    = "4.49.2"
 
   values = [
     <<-EOT
@@ -23,7 +23,7 @@ resource "helm_release" "kube_state_metrics" {
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-state-metrics"
   namespace  = "monitoring"
-  version    = "6.4.1"
+  version    = "6.4.2"
   timeout    = "180"
 
   values = [

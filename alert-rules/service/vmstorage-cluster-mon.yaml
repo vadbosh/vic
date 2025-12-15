@@ -1,0 +1,146 @@
+groups:
+  - name: vmstorage-cluster-monitoring
+    rules:
+      # ----------------------------------------------------------------
+      # GLOBAL HEALTH & DEDUPLICATION (Aggregated metrics)
+      # ----------------------------------------------------------------
+      # 1. Deduplication Efficiency
+      # Calculates the ratio of deduplicated samples to total stored rows.
+      # We use sum() over the whole cluster because we want the global efficiency rate.
+      - alert: DeduplicationRateLow
+        expr: |
+          (
+            sum(rate(vm_deduplicated_samples_total{job="vmstorage", type="merge"}[5m]))
+            / 
+            sum(rate(vm_rows_added_to_storage_total{job="vmstorage"}[5m]))
+          ) < 0.45
+        for: 10m
+        labels:
+          severity: warning
+          alertname: LowDeduplication
+        annotations:
+          summary: "Low deduplication rate (HA pair issue)"
+          description: |
+            Current global deduplication rate: {{ $value | humanizePercentage }}
+            
+            Expected: ~50% (0.50) for 2 HA agents setup.
+            If value is < 45%, check if one of the vmagent replicas is down.
+      # 2. Check for complete deduplication stoppage
+      # If samples are being written but deduplication is exactly 0, something is wrong (e.g., split-brain or config error).
+      - alert: DeduplicationNotWorking
+        expr: |
+          sum(rate(vm_deduplicated_samples_total{job="vmstorage", type="merge"}[10m])) == 0
+          and
+          sum(rate(vm_rows_added_to_storage_total{job="vmstorage"}[10m])) > 100
+        for: 15m
+        labels:
+          severity: critical
+          alertname: NoDeduplication
+        annotations:
+          summary: "Deduplication stopped (Loss of HA redundancy)"
+          description: |
+            Cluster is receiving data but deduplication is 0.
+            Likely causes: only one vmagent is active (HA lost) or 'dedup.minScrapeInterval' is misconfigured.
+      # 3. Deduplication Imbalance
+      # Uses 'sum by (instance)' to aggregate internal metric types before comparing nodes.
+      # Ensures we compare the total deduplication load per node.
+      - alert: DeduplicationImbalance
+        expr: |
+          (
+            max(sum(rate(vm_deduplicated_samples_total{job="vmstorage", type="merge"}[5m])) by (instance))
+            -
+            min(sum(rate(vm_deduplicated_samples_total{job="vmstorage", type="merge"}[5m])) by (instance))
+          ) 
+          / 
+          avg(sum(rate(vm_deduplicated_samples_total{job="vmstorage", type="merge"}[5m])) by (instance)) 
+          > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          alertname: DedupImbalance
+        annotations:
+          summary: "Deduplication imbalance between vmstorage nodes"
+          description: |
+            Variance is > 30% (current: {{ $value | humanizePercentage }}).
+            Check load balancing and replication status.
+      # 4. Data Size Imbalance
+      # Uses 'sum by (instance)' to combine 'indexdb', 'storage/big', 'storage/small', etc.
+      # This calculates the TRUE weight difference between nodes.
+      - alert: StorageSizeImbalance
+        expr: |
+          (
+            max(sum(vm_data_size_bytes{job="vmstorage"}) by (instance))
+            -
+            min(sum(vm_data_size_bytes{job="vmstorage"}) by (instance))
+          ) 
+          / 
+          avg(sum(vm_data_size_bytes{job="vmstorage"}) by (instance)) 
+          > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          alertname: StorageImbalance
+        annotations:
+          summary: "Data size imbalance detected"
+          description: |
+            Size difference > 20% (ratio: {{ $value | humanizePercentage }}).
+            Calculated based on total data size per instance.
+      # 5. Active Node Count
+      # Uses 'or vector(0)' to ensure the alert fires even if all pods are down (empty result).
+      - alert: VMStorageCountMismatch
+        expr: |
+          (count(up{job="vmstorage"} == 1) or vector(0)) < 3
+        for: 5m
+        labels:
+          severity: critical
+          alertname: StorageCountLow
+        annotations:
+          summary: "Not enough vmstorage nodes running"
+          description: |
+            Active nodes: {{ $value }}. Expected: 3.
+            Required for full replicationFactor=3 coverage.
+      # ----------------------------------------------------------------
+      # PER-INSTANCE ALERTS (Vector alerts)
+      # ----------------------------------------------------------------
+      # 6. Low Disk Space
+      # Standard check per instance.
+      - alert: StorageDiskSpaceLow
+        expr: |
+          vm_free_disk_space_bytes{job="vmstorage"} < 5368709120
+        for: 10m
+        labels:
+          severity: warning
+          alertname: LowDiskSpace
+        annotations:
+          summary: "Low disk space on vmstorage"
+          description: |
+            Instance {{ $labels.instance }} has {{ $value | humanize1024 }}B free.
+      # 7. Node Not Receiving Data
+      # Uses 'sum by (instance)' to ensure we track total rows added, regardless of internal metric labels.
+      - alert: VMStorageNotReceivingData
+        expr: |
+          sum(rate(vm_rows_added_to_storage_total{job="vmstorage"}[5m])) by (instance) == 0
+        for: 5m
+        labels:
+          severity: critical
+          alertname: StorageNoData
+        annotations:
+          summary: "vmstorage node is not receiving data"
+          description: |
+            Instance {{ $labels.instance }} receiving 0 rows/sec.
+            Check logs, network connectivity, and vminsert status.
+      # 8. High Deduplication on Read Path (vmselect)
+      # If this fires, it means vmstorage failed to deduplicate data during write, forcing vmselect to do it during read (slow).
+      - alert: HighSelectDeduplication
+        expr: |
+          sum(rate(vm_deduplicated_samples_total{job="vmselect", type="select"}[5m])) > 1000
+        for: 10m
+        labels:
+          severity: warning
+          alertname: SelectDedup
+        annotations:
+          summary: "High deduplication rate on read (vmselect)"
+          description: |
+            vmselect is deduplicating {{ $value | humanize }} samples/sec on read.
+            Ensure 'dedup.minScrapeInterval' is consistent between storage and select.
+            Check if the service/pod has crashed or stopped responding.      

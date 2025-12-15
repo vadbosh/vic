@@ -1,0 +1,95 @@
+groups:
+- name: pod-ailability-and-resources
+  rules:
+
+  # CPU Throttling
+  - alert: ContainerCPUThrottlingHigh
+    expr: sum(rate(container_cpu_cfs_throttled_seconds_total[5m])) by (pod, namespace) > 1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is being throttled"
+      description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is experiencing high CPU throttling."
+
+  # POD High CPU Usage vs Requests
+  - alert: ContainerLimitsCPUUsageHigh
+    expr: |
+      round(
+        100 *
+        sum(rate(container_cpu_usage_seconds_total{pod!="", namespace!=""}[5m])) by (namespace, pod)
+        /
+        sum by (namespace, pod) (
+          label_replace(
+            label_replace(
+              kube_pod_container_resource_limits{resource="cpu", unit="core"},
+              "namespace", "$1", "exported_namespace", "(.*)"
+            ),
+            "pod", "$1", "exported_pod", "(.*)"
+          )
+        )
+      ) > 90
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage on {{ $labels.pod }}"
+      description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is using {{ $value }}% of its CPU limit."
+
+  # POD Memory Usage
+  - alert: ContainerLimitsMemoryUsageHigh
+    expr: |
+      round((
+        sum by(namespace, pod) (
+          container_memory_working_set_bytes{pod!="", namespace!=""}
+        )
+        /
+        sum by(namespace, pod) (
+          label_replace(
+            label_replace(
+              kube_pod_container_resource_limits{resource="memory"},
+              "namespace", "$1", "exported_namespace", "(.*)"
+            ),
+            "pod", "$1", "exported_pod", "(.*)"
+          )
+        )
+      ) * 100 ) > 90
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Pod {{ $labels.pod }} memory usage high"
+      description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} uses {{ $value }}% of its memory limit."
+   
+  # Pod Stuck (Not Healthy)
+  # Detects pods stuck in Pending/Failed/Unknown for > 15m
+  - alert: KubernetesPodNotHealthy
+    expr: sum by (exported_pod, exported_namespace) (kube_pod_status_phase{phase=~"Failed|Unknown|Pending"}) > 0
+    for: 15m  
+    labels:
+      severity: critical
+    annotations:
+      summary: "Pod {{ $labels.exported_pod }} is not healthy"
+      description: "Pod is in {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} state for more than 15m." 
+
+  # Pod Restarts (Slow churn)
+  # Detects periodic restarts over 5 minutes.
+  - alert: KubernetesPodRestart
+    expr: increase(kube_pod_container_status_restarts_total[5m]) > 2
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Pod {{ $labels.exported_pod }} restarts detected"
+      description: "Pod {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} restarted {{ $value | printf \"%.0f\" }} times within 5 minutes."
+  
+  # CrashLooping      
+  - alert: PodCrashLooping
+    expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Pod {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} is crash looping"
+      description: "Pod { $labels.exported_namespace }}/{{ $labels.exported_pod }} is restarting frequently."
+        

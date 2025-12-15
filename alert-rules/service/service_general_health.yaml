@@ -1,0 +1,64 @@
+groups:
+- name: service-availability
+  rules:
+  # 2.1 Deployment Replicas
+  # Logic: Shows exactly how many replicas are missing via $value
+  - alert: DeploymentReplicasMismatch
+    expr: (kube_deployment_spec_replicas - kube_deployment_status_replicas_ready) > 0
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Deployment {{ $labels.deployment }} replicas mismatch"
+      description: "Deployment {{ $labels.exported_namespace }}/{{ $labels.deployment }} is missing {{ $value }} ready replicas."
+
+  # 2.2 StatefulSet Replicas
+  - alert: StatefulSetReplicasMismatch
+    expr: (kube_statefulset_replicas - kube_statefulset_status_replicas_ready) > 0
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "StatefulSet {{ $labels.statefulset }} replicas mismatch"
+      description: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} is missing {{ $value }} ready replicas."
+
+  # 2.3 DaemonSet Replicas
+  - alert: DaemonSetNotReady
+    expr: (kube_daemonset_status_desired_number_scheduled - kube_daemonset_status_number_ready) > 0
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "DaemonSet {{ $labels.daemonset }} is not fully ready"
+      description: "DaemonSet {{ $labels.exported_namespace }}/{{ $labels.daemonset }} is missing {{ $value }} pods on intended nodes."
+
+- name: service-resources
+  rules:
+  - alert: KubernetesPVCError
+    expr: kube_persistentvolumeclaim_status_phase{phase=~"Lost|Pending"} > 0
+    labels:
+      severity: critical
+    for: 5m
+    annotations:
+      summary: "PVC {{ $labels.persistentvolumeclaim }} is bad"
+      description: "PVC {{ $labels.persistentvolumeclaim }} in NS {{ $labels.exported_namespace }} is in {{ $labels.phase }} state."
+
+  # Checks if HPA controller explicitly says "I cannot scale this"
+  - alert: KubernetesHPAScalingAbility
+    expr: kube_horizontalpodautoscaler_status_condition{status="false", condition="AbleToScale"} == 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "HPA unable to scale"
+      description: "HPA {{ $labels.exported_namespace }}/{{ $labels.horizontalpodautoscaler }} is unable to scale. Check controller logs."
+
+  # Critical: HPA cannot read metrics (e.g., custom metrics API down), so scaling is frozen.
+  - alert: KubernetesHPAMetricAvailability
+    expr: kube_horizontalpodautoscaler_status_condition{status="false", condition="ScalingActive"} == 1
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "HPA metrics missing"
+      description: "HPA {{ $labels.exported_namespace }}/{{ $labels.horizontalpodautoscaler }} cannot collect metrics. Autoscaling is disabled."

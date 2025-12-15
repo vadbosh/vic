@@ -51,3 +51,27 @@ resource "kubernetes_secret_v1" "vm_bearer_token_secret" {
   }
   type = "Opaque"
 }
+# ------------------------------------------------------------------
+data "aws_ssm_parameter" "telegram_bot_token" {
+  name            = "/k8s/telegram-bot-token-sandbox"
+  with_decryption = true
+}
+
+resource "kubernetes_secret_v1" "telegram_credentials" {
+  metadata {
+    name      = "telegram-alertmanager-credentials"
+    namespace = "monitoring"
+  }
+
+  data = {
+    bot-token = data.aws_ssm_parameter.telegram_bot_token.value
+  }
+  type = "Opaque"
+}
+
+
+
+
+
+
+

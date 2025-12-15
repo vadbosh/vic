@@ -6,7 +6,7 @@ resource "helm_release" "victoria_metrics_auth" {
   chart      = "victoria-metrics-auth"
   namespace  = "monitoring"
   #create_namespace = true
-  version = "0.19.10"
+  version = "0.20.0"
   depends_on = [
     helm_release.victoria_metrics_cluster,
     kubernetes_secret_v1.vm_basic_auth_vic,

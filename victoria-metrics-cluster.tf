@@ -4,8 +4,8 @@ resource "helm_release" "victoria_metrics_cluster" {
   chart      = "victoria-metrics-cluster"
   namespace  = "monitoring"
   #create_namespace = true
-  version = "0.29.5" # Замените на актуальную версию
-  timeout = "200"
+  version = "0.30.1" # Замените на актуальную версию
+  timeout = "300"
 
   values = [
     <<-EOT
@@ -40,7 +40,7 @@ vmstorage:
                   operator: In
                   values:
                     - vmstorage
-            topologyKey: "topology.kubernetes.io/zone"  
+            topologyKey: "topology.kubernetes.io/zone"
   nodeSelector:
     "eks-cluster/nodegroup": "${data.terraform_remote_state.eks_core.outputs.cluster-name}-victoria"
   resources:
@@ -67,8 +67,8 @@ vmselect:
     search.noStaleMarkers: "true"
     search.maxQueryLen: "65536"
     memory.allowedPercent: "80"
-    search.maxUniqueTimeseries: "300000"
-    search.maxSamplesPerQuery: "10000000"
+    search.maxUniqueTimeseries: "500000"
+    search.maxSamplesPerQuery: "40000000"
     search.maxQueueDuration: "10s"
     search.maxConcurrentRequests: "20"
     envflag.enable: "true"
