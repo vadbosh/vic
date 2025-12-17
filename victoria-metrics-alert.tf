@@ -88,7 +88,7 @@ server:
       url: "http://vm-auth-victoria-metrics-auth.monitoring.svc:8427/select/0/prometheus"
   notifier:
     alertmanager:
-      url: "http://vm-alert-victoria-metrics-alert-alertmanager:9093"
+      url: "http://vm-alert-victoria-metrics-alert-alertmanager.monitoring.svc.cluster.local:9093"
 
   #configMap: "vmalert-rules"
 
@@ -196,186 +196,205 @@ alertmanager:
     #    secretKeyRef:
     #      name: telegram-alertmanager-credentials
     #      key: bot-token
-
+    #
   config:
     global:
       resolve_timeout: 30s
 
     route:
-      group_by: ['pod','alertname']
-      group_wait: 5s
-      group_interval: 5m
-      repeat_interval: 20m
-      receiver: WL-warning-condition
+      # Root level grouping - keeps related alerts together
+      group_by: ['alertname']
+      group_wait: 30s       # Wait 5s before sending first notification in group
+      group_interval: 5m    # Wait 5m before sending new alerts that belong to existing group
+      repeat_interval: 20m  # Resend firing alerts every 20m
+      receiver: 'null'      # Default receiver for unmatched alerts
+
       routes:
-      # ПРИОРИТЕТ 1: Алерты для SNS (severity: critical4sns)
+      # ============================================================
+      # PRIORITY 1: SNS Alerts (severity: critical4sns)
+      # ============================================================
+      # These go ONLY to SNS, not Telegram
+      # continue: false = stop processing after match
       - receiver: WL-critical4sns-condition
-        group_by: ['alertname', 'pod', 'exported_pod', 'namespace', 'exported_namespace', 'image']
+        group_by: ['alertname', 'namespace', 'exported_namespace', 'pod', 'exported_pod', 'host']
+        group_wait: 30s
+        group_interval: 5m
         repeat_interval: 5m
         matchers:
           - severity=critical4sns
-        continue: false
+        continue: false  # FIXED: Stop here, don't send to other receivers
 
-      # ПРИОРИТЕТ 2: Обычные критические алерты в Telegram (severity: critical)
+      # ============================================================
+      # PRIORITY 2: Critical Alerts (severity: critical)
+      # ============================================================
+      # These go to Telegram only
       - receiver: WL-critical-condition
-        group_by: ['alertname', 'pod', 'exported_pod', 'namespace', 'exported_namespace', 'image']
+        group_by: ['alertname', 'namespace', 'exported_namespace', 'pod', 'exported_pod', 'host']
+        group_wait: 30s
+        group_interval: 5m
         repeat_interval: 5m
         matchers:
           - severity=critical
-        continue: true
+        continue: false  # FIXED: Stop here
 
-      # ПРИОРИТЕТ 3: Warning алерты
+      # ============================================================
+      # PRIORITY 3: Warning Alerts (severity: warning)
+      # ============================================================
       - receiver: WL-warning-condition
-        group_by: ['alertname', 'pod', 'exported_pod', 'namespace', 'exported_namespace', 'image']
-        group_wait: 5s
+        group_by: ['alertname', 'namespace', 'exported_namespace', 'pod', 'exported_pod', 'host']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 15m
         matchers:
           - severity=warning
-        continue: true
+        continue: false  # FIXED: Stop here
 
-      # ПРИОРИТЕТ 4: Pod статусы
+      # ============================================================
+      # PRIORITY 4: Pod Status Notifications (podstat label)
+      # ============================================================
+      # Special case for pod lifecycle events
       - receiver: WL-PODS-condition
-        group_by: ['pod', 'exported_pod']
+        group_by: ['pod', 'exported_pod', 'namespace']
+        group_wait: 30s
+        group_interval: 2m
+        repeat_interval: 1h
         matchers:
-          - podstat=~stoppod|startpod|resource_stats_mem|resource_stats_cpu
-        continue: true
+          - podstat=~"stoppod|startpod|resource_stats_mem|resource_stats_cpu"
+        continue: false  # FIXED: Stop here
 
-      # ПРИОРИТЕТ 5: Игнорируемые алерты
+      # ============================================================
+      # PRIORITY 5: Info/None severity (suppress)
+      # ============================================================
       - receiver: 'null'
         matchers:
           - severity=~"info|none|"
+        continue: false
 
+    # ============================================================
+    # RECEIVERS CONFIGURATION
+    # ============================================================
     receivers:
-    # НОВЫЙ RECEIVER: critical4sns -> ТОЛЬКО SNS (без Telegram)
+    # SNS Receiver (for critical4sns severity only)
     - name: WL-critical4sns-condition
       sns_configs:
       - api_url: "https://sns.us-east-1.amazonaws.com"
         topic_arn: "${data.aws_sns_topic.existing_sns.arn}"
         sigv4:
           region: "${data.terraform_remote_state.network.outputs.region}"
-        subject: "ALERT: {{ .GroupLabels.alertname }}" 
+        subject: "CRITICAL: {{ .GroupLabels.alertname }}"
         message: |
-          Status: {{ if eq .Status "firing"}}🔥 {{ .Status | toUpper }} {{ .CommonLabels.alertname }} {{ else }}🍀 {{ .Status | toUpper }} {{ .CommonLabels.alertname }}{{ end }}
-          Alert Name: {{ .GroupLabels.alertname }}
+          {{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }}: {{ .GroupLabels.alertname }}
           Cluster: ${data.terraform_remote_state.eks_core.outputs.cluster-name}
-
+          Severity: {{ printf "%s\n" .CommonLabels.severity }}
           {{ range .Alerts }}
-          ───────────────────────────────────────
-          ⏰ Started: {{ .StartsAt }}
-          {{ if ne .Status "firing" }}⏰ Ended: {{ .EndsAt }}{{ end }}
-
-          📝 Summary:
-          {{ .Annotations.summary }}
-
-          📝 Description:
-          {{ .Annotations.description }}
-
-          🔍 Details:
-          {{- if .Labels.instance }} • Instance: {{ .Labels.instance }}{{ end }}
-          {{- if .Labels.namespace }} • Namespace:  {{ printf "%s\n" .Labels.namespace }}{{ end }}
-          {{- if .Labels.pod }} • Pod:  {{ printf "%s\n" .Labels.pod }}{{ end }}
-          {{- if .Labels.exported_namespace }} • Namespace:  {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
-          {{- if .Labels.exported_pod }} • Pod:  {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
-          {{- if .Labels.deployment }} • Deployment: {{ .Labels.deployment }}{{ end }}
-          {{- if .Labels.container }} • Container: {{ .Labels.container }}{{ end }}
-          {{- if .Labels.node }} • Node: {{ .Labels.node }}{{ end }}
-          {{- if .Labels.image }} • Image: {{ .Labels.image }}{{ end }}
+          ⏰ Started: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ if ne .Status "firing" }}⏰ Ended: {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}{{ printf "\n" }}{{ end }}
+          📋 Summary: {{ .Annotations.summary }}
+          📝 Description: {{ .Annotations.description }}
+          🔍 Details:{{ printf "\n" }}
+          {{- if .Labels.namespace }}  • Namespace: {{ printf "%s\n" .Labels.namespace }}{{ end }}
+          {{- if .Labels.exported_namespace }}  • Namespace: {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
+          {{- if .Labels.pod }}  • Pod: {{ printf "%s\n" .Labels.pod }}{{ end }}
+          {{- if .Labels.exported_pod }}  • Pod: {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
+          {{- if .Labels.host }}  • Host: {{ printf "%s\n" .Labels.host }}{{ end }}
+          {{- if .Labels.instance }}  • Instance: {{ printf "%s\n" .Labels.instance }}{{ end }}
+          {{- if .Labels.deployment }}  • Deployment: {{ printf "%s\n" .Labels.deployment }}{{ end }}
+          {{- if .Labels.container }}  • Container: {{ printf "%s\n" .Labels.container }}{{ end }}
+          {{- if .Labels.node }}  • Node: {{ printf "%s\n" .Labels.node }}{{ end }}
+          {{- if .Labels.image }}  • Image: {{ printf "%s\n" .Labels.image }}{{ end }}
           {{ end }}
-
-          ═══════════════════════════════════════
         attributes:
           cluster: "${data.terraform_remote_state.eks_core.outputs.cluster-name}"
           severity: "critical4sns"
 
-    # СУЩЕСТВУЮЩИЙ RECEIVER: critical -> Telegram
+    # Telegram Receiver for Critical alerts
     - name: WL-critical-condition
       telegram_configs:
       - send_resolved: true
-        #bot_token: "$TELEGRAM_BOT_TOKEN"
         bot_token_file: "/etc/secrets/telegram/bot-token"
         chat_id: -5079754285
         api_url: "https://api.telegram.org"
         parse_mode: HTML
         message: |
-          {{ if eq .Status "firing"}}&#128293;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ else }}&#127808;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ end }}
+          {{ if eq .Status "firing"}}🔥{{ else }}✅{{ end }} <b>{{ .Status | toUpper }}: {{ .GroupLabels.alertname }}</b>
+          💥 <b>Severity:</b>  ◆ {{ printf "%s ◆\n" .CommonLabels.severity }}
+          ⏰ <b>Started:</b> {{ (index .Alerts 0).StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ if ne .Status "firing"}}⏰ <b>Ended:</b> {{ (index .Alerts 0).EndsAt.Format "2006-01-02 15:04:05 MST" }}{{ printf "\n" }}{{ end }}
+          {{- if .CommonAnnotations.summary }}📋 <b>Summary:</b> {{ printf "%s\n" .CommonAnnotations.summary }}{{ end }}
+          {{- if .CommonAnnotations.description }}📝 <b>Description:</b> {{ printf "%s\n" .CommonAnnotations.description }}{{ end }}
           {{ range .Alerts }}
-              &#9201; <b>StartAt:</b> {{ .StartsAt }}
-              {{ if ne .Status "firing"}}&#9201; <b>Ended:</b> {{ .EndsAt }}{{ end }}
-              ●  <b>Alert:</b>  {{ printf "%s  ●\n" .Labels.severity }}
-              {{- if .Annotations.summary }}<b>Summary:</b>  {{ printf "%s\n" .Annotations.summary }}{{ end }}
-              {{- if .Annotations.description }}<b>Description:</b>  {{ printf "%s\n" .Annotations.description }}{{ end }}
-              {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
-              {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
-              {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
-              {{- if .Labels.exported_namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
-              {{- if .Labels.exported_pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
-              {{- if .Labels.image }}<b>Image:</b> ● {{ printf "%s ●\n" .Labels.image }}{{ end }}
-              {{- if .Labels.deployment }}<b>Deployment:</b>  {{ printf "%s\n" .Labels.deployment }}{{ end }}
-              {{- if .Labels.container }}<b>Container:</b>  {{ printf "%s\n" .Labels.container }}{{ end }}
-              {{- if .Labels.integration }}<b>Integration:</b>  {{ printf "%s\n" .Labels.integration }}{{ end }}
-              {{- if .Labels.horizontalpodautoscaler }}<b>HPautoscaler for:</b>  {{ printf "%s\n" .Labels.horizontalpodautoscaler }}{{ end }}
-              {{- if .Labels.host }}<b>Host:</b>  {{ printf "%s\n" .Labels.host }}{{ end }}
-              {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
-              {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
+          {{- if .Labels.namespace }}🏷 <b>Namespace:</b> {{ printf "%s\n" .Labels.namespace }}{{ end }}
+          {{- if .Labels.exported_namespace }}🏷 <b>Namespace:</b> {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
+          {{- if .Labels.pod }}📦 <b>Pod:</b> {{ printf "%s\n" .Labels.pod }}{{ end }}
+          {{- if .Labels.exported_pod }}📦 <b>Pod:</b> {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
+          {{- if .Labels.host }}🌐 <b>Host:</b> {{ printf "%s\n" .Labels.host }}{{ end }}
+          {{- if .Labels.instance }}🖥 <b>Instance:</b> {{ printf "%s\n" .Labels.instance }}{{ end }}
+          {{- if .Labels.deployment }}🚀 <b>Deployment:</b> {{ printf "%s\n" .Labels.deployment }}{{ end }}
+          {{- if .Labels.container }}📦 <b>Container:</b> {{ printf "%s\n" .Labels.container }}{{ end }}
+          {{- if .Labels.node }}🖥 <b>Node:</b> {{ printf "%s\n" .Labels.node }}{{ end }}
+          {{- if .Labels.horizontalpodautoscaler }}⚖️ <b>HPA:</b> {{ printf "%s\n" .Labels.horizontalpodautoscaler }}{{ end }}
+          {{- if .Labels.image }}🐳 <b>Image:</b> {{ printf "%s\n" .Labels.image }}{{ end }}
+          {{- if .Labels.reason }}❓ <b>Reason:</b> {{ printf "%s\n" .Labels.reason }}{{ end }}
           {{ end }}
 
-    - name: WL-PODS-condition
-      telegram_configs:
-      - send_resolved: false
-        #bot_token: "$TELEGRAM_BOT_TOKEN"
-        bot_token_file: "/etc/secrets/telegram/bot-token"
-        chat_id: -5079754285
-        api_url: "https://api.telegram.org"
-        parse_mode: HTML
-        message: |
-          {{ range .Alerts }}
-              {{ if eq .Labels.podstat "startpod"}}&#128640;  <b>{{ .Labels.podstat | toUpper }}</b> {{ else }}&#128310;  <b>{{ .Labels.podstat | toUpper }}</b> {{ end }}
-              &#9201; <b>StartAt:</b> {{ printf "%s\n" .StartsAt }}
-              {{- if .Annotations.summary }}<b>Summary:</b>  {{ printf "%s\n" .Annotations.summary }}{{ end }}
-              {{- if .Annotations.description }}<b>Description:</b>  {{ printf "%s\n" .Annotations.description }}{{ end }}
-              {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
-              {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
-              {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
-              {{- if .Labels.exported_namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
-              {{- if .Labels.exported_pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
-              {{- if .Labels.image }}<b>Image:</b> ● {{ printf "%s ●\n" .Labels.image }}{{ end }}
-              {{- if .Labels.deployment }}<b>Deployment:</b>  {{ printf "%s\n" .Labels.deployment }}{{ end }}
-              {{- if .Labels.container }}<b>Container:</b>  {{ printf "%s\n" .Labels.container }}{{ end }}
-              {{- if .Labels.host }}<b>Host:</b>  {{ printf "%s\n" .Labels.host }}{{ end }}
-              {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
-              {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
-          {{ end }}
-
+    # Telegram Receiver for Warning alerts
     - name: WL-warning-condition
       telegram_configs:
       - send_resolved: true
-        #bot_token: "$TELEGRAM_BOT_TOKEN"
         bot_token_file: "/etc/secrets/telegram/bot-token"
         chat_id: -5079754285
         api_url: "https://api.telegram.org"
         parse_mode: HTML
         message: |
-          {{ if eq .Status "firing"}}&#128681;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ else }}&#127808;  <b>{{ .Status | toUpper }} {{ .CommonLabels.alertname }}</b> {{ end }}
+          {{ if eq .Status "firing"}}⚠️{{ else }}✅{{ end }} <b>{{ .Status | toUpper }}: {{ .GroupLabels.alertname }}</b>
+          🔔 <b>Severity:</b>  ◆ {{ printf "%s ◆\n" .CommonLabels.severity }}
+          ⏰ <b>Started:</b> {{ (index .Alerts 0).StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ if ne .Status "firing"}}⏰ <b>Ended:</b> {{ (index .Alerts 0).EndsAt.Format "2006-01-02 15:04:05 MST" }}{{ printf "\n" }}{{ end }}
+          {{- if .CommonAnnotations.summary }}📋 <b>Summary:</b> {{ printf "%s\n" .CommonAnnotations.summary }}{{ end }}
+          {{- if .CommonAnnotations.description }}📝 <b>Description:</b> {{ printf "%s\n" .CommonAnnotations.description }}{{ end }}
           {{ range .Alerts }}
-              &#9201; <b>StartAt:</b> {{ .StartsAt }}
-              {{ if ne .Status "firing"}}&#9201; <b>Ended:</b> {{ .EndsAt }}{{ end }}
-              ●  <b>Alert:</b>  {{ printf "%s  ●\n" .Labels.severity }}
-              {{- if .Annotations.summary }}<b>Summary:</b>  {{ printf "%s\n" .Annotations.summary }}{{ end }}
-              {{- if .Annotations.description }}<b>Description:</b> {{ printf "%s\n" .Annotations.description }}{{ end }}
-              {{- if .Labels.instance }}<b>Instance:</b>  {{ printf "%s\n" .Labels.instance }}{{ end }}
-              {{- if .Labels.namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.namespace }}{{ end }}
-              {{- if .Labels.pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.pod }}{{ end }}
-              {{- if .Labels.exported_namespace }}<b>Namespace:</b>  {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
-              {{- if .Labels.exported_pod }}&#128313; <b>Pod:</b>  {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
-              {{- if .Labels.image }}<b>Image:</b> ● {{ printf "%s ●\n" .Labels.image }}{{ end }}
-              {{- if .Labels.deployment }}<b>Deployment:</b>  {{ printf "%s\n" .Labels.deployment }}{{ end }}
-              {{- if .Labels.container }}<b>Container:</b>  {{ printf "%s\n" .Labels.container }}{{ end }}
-              {{- if .Labels.integration }}<b>Integration:</b>  {{ printf "%s\n" .Labels.integration }}{{ end }}
-              {{- if .Labels.horizontalpodautoscaler }}<b>HPautoscaler for:</b>  {{ printf "%s\n" .Labels.horizontalpodautoscaler }}{{ end }}
-              {{- if .Labels.host }}<b>Host:</b>  {{ printf "%s\n" .Labels.host }}{{ end }}
-              {{- if .Labels.node }}<b>Node:</b>  {{ printf "%s\n" .Labels.node }}{{ end }}
-              {{- if .Labels.reason }}<b>Reason:</b>  {{ printf "%s\n" .Labels.reason }}{{ end }}
+          {{- if .Labels.namespace }}🏷 <b>Namespace:</b> {{ printf "%s\n" .Labels.namespace }}{{ end }}
+          {{- if .Labels.exported_namespace }}🏷 <b>Namespace:</b> {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
+          {{- if .Labels.pod }}📦 <b>Pod:</b> {{ printf "%s\n" .Labels.pod }}{{ end }}
+          {{- if .Labels.exported_pod }}📦 <b>Pod:</b> {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
+          {{- if .Labels.host }}🌐 <b>Host:</b> {{ printf "%s\n" .Labels.host }}{{ end }}
+          {{- if .Labels.instance }}🖥 <b>Instance:</b> {{ printf "%s\n" .Labels.instance }}{{ end }}
+          {{- if .Labels.deployment }}🚀 <b>Deployment:</b> {{ printf "%s\n" .Labels.deployment }}{{ end }}
+          {{- if .Labels.container }}📦 <b>Container:</b> {{ printf "%s\n" .Labels.container }}{{ end }}
+          {{- if .Labels.node }}🖥 <b>Node:</b> {{ printf "%s\n" .Labels.node }}{{ end }}
+          {{- if .Labels.horizontalpodautoscaler }}⚖️ <b>HPA:</b> {{ printf "%s\n" .Labels.horizontalpodautoscaler }}{{ end }}
+          {{- if .Labels.integration }}🔌 <b>Integration:</b> {{ printf "%s\n" .Labels.integration }}{{ end }}
+          {{- if .Labels.image }}🐳 <b>Image:</b> {{ printf "%s\n" .Labels.image }}{{ end }}
+          {{- if .Labels.reason }}❓ <b>Reason:</b> {{ printf "%s\n" .Labels.reason }}{{ end }}
           {{ end }}
 
+    # Telegram Receiver for Pod lifecycle events
+    - name: WL-PODS-condition
+      telegram_configs:
+      - send_resolved: false  # Don't send resolved for pod events
+        bot_token_file: "/etc/secrets/telegram/bot-token"
+        chat_id: -5079754285
+        api_url: "https://api.telegram.org"
+        parse_mode: HTML
+        message: |
+          {{ range .Alerts }}
+          {{ if eq .Labels.podstat "startpod"}}🚀 <b>POD STARTED</b>{{ else if eq .Labels.podstat "stoppod"}}🛑 <b>POD STOPPED</b>{{ else }}📊 <b>{{ .Labels.podstat | toUpper }}</b>{{ end }}
+          {{ printf "⏰ Time: %s\n" (.StartsAt.Format "2006-01-02 15:04:05 MST") }}
+
+          {{- if .Annotations.summary }}📋 <b>Summary:</b> {{ printf "%s\n" .Annotations.summary }}{{ end }}
+          {{- if .Annotations.description }}📝 <b>Description:</b> {{ printf "%s\n" .Annotations.description }}{{ end }}
+          {{- if .Labels.namespace }}🏷 <b>Namespace:</b> {{ printf "%s\n" .Labels.namespace }}{{ end }}
+          {{- if .Labels.exported_namespace }}🏷 <b>Namespace:</b> {{ printf "%s\n" .Labels.exported_namespace }}{{ end }}
+          {{- if .Labels.pod }}📦 <b>Pod:</b> {{ printf "%s\n" .Labels.pod }}{{ end }}
+          {{- if .Labels.exported_pod }}📦 <b>Pod:</b> {{ printf "%s\n" .Labels.exported_pod }}{{ end }}
+          {{- if .Labels.deployment }}🚀 <b>Deployment:</b> {{ printf "%s\n" .Labels.deployment }}{{ end }}
+          {{- if .Labels.container }}📦 <b>Container:</b> {{ printf "%s\n" .Labels.container }}{{ end }}
+          {{- if .Labels.node }}🖥 <b>Node:</b> {{ printf "%s\n" .Labels.node }}{{ end }}
+          {{- if .Labels.image }}🐳 <b>Image:</b> {{ printf "%s\n" .Labels.image }}{{ end }}
+          {{- if .Labels.reason }}❓ <b>Reason:</b> {{ printf "%s\n" .Labels.reason }}{{ end }}
+          {{ end }}
+
+    # Null receiver for suppressed alerts
     - name: 'null'
 
   resources:

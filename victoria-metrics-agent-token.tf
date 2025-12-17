@@ -104,10 +104,10 @@ extraScrapeConfigs:
     static_configs:
     - targets:
       - vm-cluster-victoria-metrics-cluster-vmselect.monitoring.svc:8481
-  #- job_name: vmagent-svc
-  #  static_configs:
-  #  - targets:
-  #    - vm-agent-token-victoria-metrics-agent.monitoring.svc:8429
+  - job_name: vmalert
+    static_configs:
+    - targets:
+      - vm-alert-victoria-metrics-alert-server.monitoring.svc:8880
   - job_name: vmauth
     static_configs:
     - targets:

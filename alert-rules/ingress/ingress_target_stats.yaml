@@ -31,7 +31,7 @@ groups:
           summary: "High Latency: {{ $labels.namespace }}/{{ $labels.host }}"
           description: "{{ $labels.host }} The P95 response time is {{ $value | humanizeDuration }} over the last 5 minutes (threshold: >2000ms)."
 
-      - alert: NginxTargetResponseTimeHigh200 
+      - alert: NginxTargetResponseTimeHigh200
         expr: |
           histogram_quantile(
                0.95,sum(rate
@@ -39,7 +39,7 @@ groups:
                nginx_ingress_controller_request_duration_seconds_bucket{
                host=~"staging.wellnessliving.com|thoth.downpage.staging.wellnessliving.com"}[5m]
                )
-          ) by(le,namespace,host)) > 0.2 
+          ) by(le,namespace,host)) > 0.2
         for: 2m
         labels:
           severity: warning
@@ -73,20 +73,20 @@ groups:
                nginx_ingress_controller_request_duration_seconds_bucket{
                host=~"debug.demo.wellnessliving.com"}[5m]
                )
-          ) by(le,namespace,host)) > 0.9 
+          ) by(le,namespace,host)) > 0.9
         for: 2m
         labels:
           severity: warning
           type: backend_stats
         annotations:
           summary: "High Latency: {{ $labels.namespace }}/{{ $labels.host }}"
-          description: "{{ $labels.host }} The P95 response time is {{ $value | humanizeDuration }} over the last 5 minutes (threshold: >900ms)."      
+          description: "{{ $labels.host }} The P95 response time is {{ $value | humanizeDuration }} over the last 5 minutes (threshold: >900ms)."
 
       # 2. Total Requests (Traffic Volume)
       # Logic: Counts the total number of requests sent to a specific service over 5 minutes.
       # Equivalent to AWS ALB "Request Count".
       - alert: NginxTargetRequestCount
-        expr: sum by (namespace, host) (increase(nginx_ingress_controller_requests{host!="_"}[5m])) > 17000
+        expr: sum by (namespace, host) (increase(nginx_ingress_controller_requests{host!="_"}[5m])) > 25000
         for: 2m
         labels:
           severity: warning
@@ -96,7 +96,7 @@ groups:
           description: "{{ $labels.host }} processed {{ $value | humanize }} requests in the last 5 minutes."
 
       # 3. Target Connection Errors (502/504)
-      # Logic: Counts 502 (Bad Gateway) and 504 (Gateway Timeout) errors. 
+      # Logic: Counts 502 (Bad Gateway) and 504 (Gateway Timeout) errors.
       # These specific codes usually indicate the Ingress cannot connect to the Pod.
       # Equivalent to AWS ALB "Target Connection Errors".
       - alert: NginxTargetConnectionErrors5xx
@@ -108,7 +108,7 @@ groups:
         annotations:
           summary: "Connection Failed: {{ $labels.namespace }}/{{ $labels.host }}"
           description: "Detected {{ $value }} connection errors (5xx) in the last 5 minutes {{ $labels.host }}."
-      
+
       # Logic: Counts 4xx errors.
       - alert: NginxTargetConnectionErrors4xx
         expr: sum by (namespace, host) (increase(nginx_ingress_controller_requests{host!="_",status=~"4.."}[5m])) > 50
@@ -120,4 +120,4 @@ groups:
           summary: "Connection Failed: {{ $labels.namespace }}/{{ $labels.host }}"
           description: "Detected {{ $value }} connection errors (4xx) in the last 5 minutes {{ $labels.host }}."
 
-            
+

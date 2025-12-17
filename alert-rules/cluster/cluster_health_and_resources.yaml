@@ -41,7 +41,7 @@ groups:
   # 1.4 Memory: Max usage (Risk of OOM Killer on node)
   - alert: NodeHighMemoryUsage
     expr: |-
-      round (sum by(board_asset_tag, eks_cluster_nodegroup, k8s_node_role, instance) 
+      round (sum by(board_asset_tag, eks_cluster_nodegroup, k8s_node_role, instance)
         (
          (
           container_memory_working_set_bytes{id="/"}
@@ -60,7 +60,7 @@ groups:
     annotations:
       summary: "High Memory on {{ $labels.instance }} ({{ $labels.k8s_node_role }})"
       description: |-
-        Memory usage is at {{ $value | humanize }}% on node {{ $labels.instance }} 
+        Memory usage is at {{ $value | humanize }}% on node {{ $labels.instance }}
         (nodegroup: {{ $labels.eks_cluster_nodegroup }}, role: {{ $labels.k8s_node_role }}, asset: {{ $labels.board_asset_tag }})
 
   - alert: KubernetesMemoryPressure
@@ -85,9 +85,9 @@ groups:
         Node {{ $labels.exported_node }} ({{ $labels.board_asset_tag }}, {{ $labels.product_name }}) has DiskPressure condition
     labels:
       severity: critical
-    for: 2m        
+    for: 2m
 
-  # 1.5 CoreDNS        
+  # 1.5 CoreDNS
   - alert: CoreDNSPanic
     expr: sum(increase(coredns_panics_total[1m])) > 0
     labels:
@@ -107,7 +107,7 @@ groups:
     labels:
       severity: warning
     for: 5m
-  
+
   - alert: HostUnusualNetworkThroughputOut
     annotations:
       description: |-
@@ -119,7 +119,7 @@ groups:
     labels:
       severity: warning
     for: 5m
-  
+
   - alert: HostUnusualDiskReadRate
     annotations:
       description: |-
@@ -131,7 +131,7 @@ groups:
     labels:
       severity: warning
     for: 5m
-  
+
   - alert: HostUnusualDiskWriteRate
     annotations:
       description: |-
@@ -143,7 +143,7 @@ groups:
     labels:
       severity: warning
     for: 2m
- 
+
   - alert: KubernetesPVVolumeOutOfDiskSpace
     expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes * 100 < 10
     for: 2m
@@ -160,7 +160,7 @@ groups:
     for: 5m
     annotations:
       summary: "PVC {{ $labels.persistentvolumeclaim }} is bad"
-      description: "PVC {{ $labels.persistentvolumeclaim }} in NS {{ $labels.exported_namespace }} is in {{ $labels.phase }} state."      
+      description: "PVC {{ $labels.persistentvolumeclaim }} in NS {{ $labels.exported_namespace }} is in {{ $labels.phase }} state."
 
   # -------------------------------------------------------------
   # 1. FILESYSTEM (Disk Space & Inodes)

@@ -60,17 +60,17 @@ groups:
     annotations:
       summary: "Pod {{ $labels.pod }} memory usage high"
       description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} uses {{ $value }}% of its memory limit."
-   
+
   # Pod Stuck (Not Healthy)
   # Detects pods stuck in Pending/Failed/Unknown for > 15m
   - alert: KubernetesPodNotHealthy
     expr: sum by (exported_pod, exported_namespace) (kube_pod_status_phase{phase=~"Failed|Unknown|Pending"}) > 0
-    for: 15m  
+    for: 15m
     labels:
       severity: critical
     annotations:
       summary: "Pod {{ $labels.exported_pod }} is not healthy"
-      description: "Pod is in {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} state for more than 15m." 
+      description: "Pod is in {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} state for more than 15m."
 
   # Pod Restarts (Slow churn)
   # Detects periodic restarts over 5 minutes.
@@ -82,8 +82,8 @@ groups:
     annotations:
       summary: "Pod {{ $labels.exported_pod }} restarts detected"
       description: "Pod {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} restarted {{ $value | printf \"%.0f\" }} times within 5 minutes."
-  
-  # CrashLooping      
+
+  # CrashLooping
   - alert: PodCrashLooping
     expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 > 0
     for: 5m
@@ -92,4 +92,4 @@ groups:
     annotations:
       summary: "Pod {{ $labels.exported_namespace }}/{{ $labels.exported_pod }} is crash looping"
       description: "Pod { $labels.exported_namespace }}/{{ $labels.exported_pod }} is restarting frequently."
-        
+

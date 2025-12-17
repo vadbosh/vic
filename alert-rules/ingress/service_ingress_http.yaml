@@ -44,7 +44,7 @@ groups:
     annotations:
       summary: "High 5xx error rate on {{ $labels.host }}"
       description: "Domain {{ $labels.host }} has high 503 error rate: {{ $value | printf \"%.2f\" }}%."
-        
+
   # 2.11 Error 4xx (Client Errors)
   # Kept absolute threshold (> 20 req/s) as percentage can be noisy for 4xx (scanners)
   - alert: IngressHigh4xxRate
