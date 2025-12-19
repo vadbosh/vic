@@ -1,10 +1,10 @@
 
 terraform {
   required_version = ">= 0.14"
-  backend "s3" {
-    # !!! MUST RUN INIT #
-    # key -> terraform init -backend-config="backend-config.tfvars"
-  }
+  #  backend "s3" {
+  #  # !!! MUST RUN INIT #
+  #  # key -> terraform init -backend-config="backend-config.tfvars"
+  #}
   required_providers {
     aws = {
       source  = "hashicorp/aws"

@@ -1,0 +1,38 @@
+groups:
+  - name: test-debug-group
+    rules:
+      - alert: TestTelegramTemplateFull
+        # vector(1) всегда равен 1. Условие > 0 всегда истинно.
+        expr: vector(1) > 0
+        for: 10s
+        labels:
+          # ВАЖНО: severity critical отправляет в Telegram (согласно вашему роутингу)
+          severity: critical
+
+          # === Имитация лейблов для проверки вашего шаблона ===
+
+          # Проверяем приоритет exported_namespace (должен вывестись он)
+          namespace: "hidden-namespace"
+          exported_namespace: "production-billing"
+
+          # Проверяем приоритет exported_pod
+          pod: "pod-123-real"
+          exported_pod: "billing-app-7890-xyz"
+
+          # Остальные поля
+          host: "api.wellnessliving.com"
+          instance: "10.20.30.40:9100"
+          deployment: "billing-service"
+
+          # Проверяем exported_container
+          container: "hidden-php-fpm"
+          exported_container: "php-fpm"
+
+          node: "ip-10-0-5-12.ec2.internal"
+          horizontalpodautoscaler: "billing-hpa-v2"
+          image: "wellnessliving/backend:v2025.1.0"
+          reason: "OOMKilled"
+
+        annotations:
+          summary: "TEST: Полная проверка шаблона Telegram"
+          description: "Это тестовый алерт. Он содержит все возможные лейблы, чтобы вы могли убедиться, что 'or', 'if' и форматирование работают идеально."
