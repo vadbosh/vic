@@ -1,0 +1,265 @@
+config:
+  service: |
+    [SERVICE]
+        Flush                     5
+        Grace                     30
+        Log_Level                 error
+        Daemon                    off
+        Parsers_File              parsers.conf
+        HTTP_Server               On
+        HTTP_Listen               0.0.0.0
+        HTTP_Port                 2020
+        storage.path              /var/fluent-bit/state/flb-storage/
+        storage.sync              normal
+        storage.checksum          off
+        storage.backlog.mem_limit 5M
+
+  inputs: |
+    [INPUT]
+        Name                kubernetes_events
+        Tag                 kube.events.*
+        Kube_URL            https://kubernetes.default.svc:443
+        DB                  /var/fluent-bit/state/flb_events.db
+
+    [INPUT]
+        Name                tail
+        Tag                 application.*
+        Exclude_Path        /var/log/containers/autoscaler*, /var/log/containers/aws-load-balancer-controller*, /var/log/containers/aws-node*, /var/log/containers/cert-manager*, /var/log/containers/cilium*, /var/log/containers/cloudwatch-agent*, /var/log/containers/deliveryhero*, /var/log/containers/ebs-csi*, /var/log/containers/efs-csi*, /var/log/containers/fluent-bit*, /var/log/containers/fluentd*, /var/log/containers/hubble*, /var/log/containers/keda*, /var/log/containers/kube-proxy*, /var/log/containers/metrics-server*, /var/log/containers/reflector*, /var/log/containers/ingress-nginx-test-controller*, /var/log/containers/ingress-nginx-victoria-controller*, /var/log/containers/stakater-reloader*, /var/log/containers/eks-pod-identity*, /var/log/containers/node-exporter-prometheus-node-exporter*, /var/log/containers/node-role-labeler*
+        Path                /var/log/containers/*.log, /var/log/aws-routed-eni/ipamd.log
+        multiline.parser    docker, cri
+        DB                  /var/fluent-bit/state/flb_container.db
+        Mem_Buf_Limit       50MB
+        Skip_Long_Lines     On
+        Refresh_Interval    10
+        Rotate_Wait         30
+        storage.type        filesystem
+        Read_from_Head      true
+
+    [INPUT]
+        Name                systemd
+        Tag                 dataplane.systemd.*
+        Systemd_Filter      _SYSTEMD_UNIT=docker.service
+        Systemd_Filter      _SYSTEMD_UNIT=containerd.service
+        #Systemd_Filter      _SYSTEMD_UNIT=kubelet.service
+        DB                  /var/fluent-bit/state/systemd.db
+        Path                /var/log/journal
+        Read_From_Tail      true
+
+    [INPUT]
+        Name                tail
+        Tag                 dataplane.tail.*
+        Exclude_Path        /var/log/containers/kube-proxy*
+        Path                /var/log/containers/aws-node*
+        multiline.parser    docker, cri
+        DB                  /var/fluent-bit/state/flb_dataplane_tail.db
+        Mem_Buf_Limit       50MB
+        Skip_Long_Lines     On
+        Refresh_Interval    10
+        storage.type        filesystem
+        Read_from_Head      true
+
+  filters: |
+    # === GROUP 1: APPLICATION LOG PROCESSING (application.*) ===
+    [FILTER]
+        Name                kubernetes
+        Match               application.*
+        Kube_URL            https://kubernetes.default.svc.cluster.local:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Merge_Log           On
+        Merge_Log_Key       log_processed
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude Off
+        Labels              On
+        Annotations         On
+        Buffer_Size         0
+        Use_Kubelet         On
+        Kubelet_Host        ${KUBELET_HOST}
+        Kubelet_Port        10250
+        tls.verify          Off
+
+    [FILTER]
+        Name                lua
+        Match               application.*
+        call                filter_stdout
+        script              /fluent-bit/scripts/fluent-bit-lua.lua
+
+    [FILTER]
+        Name                rewrite_tag
+        Match               application.*
+        Rule                "retag_to_drop" ".+" "events-to-drop" false
+
+    [FILTER]
+        Name                grep
+        Match               application.var.log.aws-routed-eni.ipamd.log
+        Regex               log vpc.amazonaws.com/pod-ips:
+
+    [FILTER]
+        Name                lua
+        Match               application.*
+        call                get_pod_ip
+        script              /fluent-bit/scripts/fluent-bit-lua.lua
+
+    # === GROUP 2: KUBERNETES EVENT PROCESSING (kube.events.*) ===
+    [FILTER]
+        Name                lua
+        Match               kube.events.*
+        call                create_field_o
+        script              /fluent-bit/scripts/fluent-bit-lua.lua
+
+    [FILTER]
+        Name                rewrite_tag
+        Match               kube.events.*
+        Rule                "new_tag" "(.+)" "$1" false
+
+    # === GROUP 3: SYSTEM LOG PROCESSING (dataplane.systemd.*) ===
+    [FILTER]
+        Name                modify
+        Match               dataplane.systemd.*
+        Rename              _HOSTNAME                   hostname
+        Rename              _SYSTEMD_UNIT               systemd_unit
+        Rename              MESSAGE                     message
+        Remove_regex        ^((?!hostname|systemd_unit|message).)*$
+
+    # === GROUP 4: COMMON ENRICHMENT FOR ALL DATAPLANE LOGS ===
+    [FILTER]
+        Name                aws
+        Match               dataplane.*
+        imds_version        v2
+
+  outputs: |
+    [OUTPUT]
+        Name                null
+        Match               events-to-drop
+
+    [OUTPUT]
+        Name                pgsql
+        Match_Regex         ^(?!events-to-drop$).*
+        #Match               *
+        Host                fluent-bit-4kube.czv5nwocnwdl.us-east-1.rds.amazonaws.com
+        Port                5432
+        Database            fluentbit_logs
+        Table               fluentbit_logs
+        User                ${PG_USER}
+        Password            ${PG_PASSWORD}
+        Timestamp_Key       timestamp
+        Tag_Key             tag
+        Store_As            jsonb
+        Json_Key            log
+
+  parsers: |
+    [PARSER]
+        Name                docker
+        Format              json
+        Time_Key            time
+        Time_Format         %Y-%m-%dT%H:%M:%S.%L
+        Time_Keep           On
+
+    [PARSER]
+        Name                cri
+        Format              regex
+        Regex               ^(?<time>[^ ]+) (?<stream>stdout|stderr) ([^ ]*) (?<log>.*)$
+        Time_Key            time
+        Time_Format         %Y-%m-%dT%H:%M:%S.%L%z
+        Time_Keep           On
+
+
+hostNetwork: true
+dnsPolicy: ClusterFirstWithHostNet
+daemonSet:
+  enabled: true
+
+priorityClassName: "system-node-critical"
+
+envFrom:
+  - secretRef:
+      name: fluent-bit-db-creds
+
+annotations:
+  reloader.stakater.com/auto: "true"
+
+daemonSet:
+  enabled: true
+
+namespace: fluentbit
+
+resources:
+  # limits:
+  #  cpu: 150m
+  #  memory: 100Mi
+  requests:
+    cpu: 40m
+    memory: 50Mi
+
+metrics:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "fluent-bit"
+
+rbac:
+  create: true
+  nodeAccess: true
+  eventsAccess: true
+  extraRules:
+    - apiGroups: [""]
+      resources:
+        - namespaces
+        - pods
+        - pods/logs
+        - nodes
+        - nodes/proxy
+      verbs: ["get", "list", "watch"]
+
+image:
+  repository: cr.fluentbit.io/fluent/fluent-bit
+  tag: latest
+  pullPolicy: Always
+
+env:
+  - name: KUBELET_HOST
+    valueFrom:
+      fieldRef:
+        fieldPath: status.hostIP
+
+daemonSetVolumes:
+  - name: lua-scripts
+    configMap:
+      name: fluent-bit-lua-scripts
+  - name: varlog
+    hostPath:
+      path: /var/log
+      type: ""
+  - name: podslog
+    hostPath:
+      path: /var/log/pods
+      type: ""
+  - name: varlibdockercontainers
+    hostPath:
+      path: /var/lib/docker/containers
+      type: ""
+  - name: etcmachineid
+    hostPath:
+      path: /etc/machine-id
+      type: File
+
+daemonSetVolumeMounts:
+  - name: lua-scripts
+    mountPath: /fluent-bit/scripts/
+  - name: varlog
+    mountPath: /var/log
+    readOnly: true
+  - name: varlibdockercontainers
+    mountPath: /var/lib/docker/containers
+    readOnly: true
+  - name: etcmachineid
+    mountPath: /etc/machine-id
+    readOnly: true
+  - name: podslog
+    mountPath: /var/log/pods
+    readOnly: true
