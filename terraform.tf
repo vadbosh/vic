@@ -7,8 +7,9 @@ terraform {
   }
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.25.0" #"~> 5.99.1"
+      source = "hashicorp/aws"
+      #version = "~> 6.10.0" #"~> 5.99.1"
+      version = "~> 5.99.1"
     }
     random = {
       source  = "hashicorp/random"
@@ -23,15 +24,15 @@ terraform {
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = ">= 3.0.0" #">= 2.38.0" #">= 2.37.1"
+      version = ">= 2.38.0" #">= 2.37.1"
     }
     acme = {
       source  = "vancluever/acme"
-      version = "2.39.0" #"2.32.0"
+      version = "2.35.0" #"2.32.0"
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "3.1.1" #"2.17.0"
+      version = "3.0.2" #"2.17.0"
     }
   }
 }
