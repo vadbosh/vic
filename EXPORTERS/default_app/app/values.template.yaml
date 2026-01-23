@@ -1,0 +1,105 @@
+---
+nameOverride: ${app_name}
+releasePrefix: "-"
+deployments:
+  ${app_name}:
+    replicas: "${replicas}"
+    terminationGracePeriodSeconds: 1200
+    containers:
+      - name: ${app_name}
+        image: ${repository_name}  
+        imageTag: ${image_tag}
+        ports:
+          - name: http
+            containerPort: ${app_port}
+          # >>> Port for collecting PHP-FPM performance metrics    
+          - name: fpm-metrics
+            containerPort: ${fpm_metrics_port} # Prometheus FPM Exporter is used
+          # >>> Port for collecting metrics from the Apache web server itself    
+          - name: apache-metrics
+            containerPort: ${apache_metrics_port} # Prometheus Apache Exporter is used
+        resources:
+          limits:
+            cpu: ${resource_limit_cpu}
+            memory: ${resource_limit_memory}
+          requests:
+            cpu: ${resource_request_cpu}
+            memory: ${resource_request_memory}
+        livenessProbe:
+          httpGet:
+            path: ${health_check}
+            port: ${app_port}
+          initialDelaySeconds: ${container_init_delay}
+          periodSeconds: 5
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: ${health_check}
+            port: ${app_port}
+          initialDelaySeconds: ${container_init_delay}
+          periodSeconds: 5
+          timeoutSeconds: 10
+        env:
+          - name: RUN_ENTRYPOINT
+            value: ${entrypoint}
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |+
+                  kill -SIGINT 1
+    strategy:
+      rollingUpdate:
+        maxSurge: ${rollingUpdate_maxSurge}
+        maxUnavailable: ${rollingUpdate_maxUnavailable}
+      type: RollingUpdate
+    nodeSelector:
+      eks-cluster/nodegroup: ${nodepool}
+
+services:
+  ${app_name}:
+    type: ClusterIP
+    ports:
+      - name: web80
+        port: 80
+        targetPort: ${app_port}
+  # >>> PHP-FPM performance metrics SERVICE
+  fpm-metrics-${app_name}:
+    type: ClusterIP
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "${fpm_metrics_port}"
+    ports:
+      - name: fpm-metrics
+        port: ${fpm_metrics_port}
+        targetPort: fpm-metrics
+  # >>> Apache performance metrics SERVICE
+  apache-metrics-${app_name}:
+    type: ClusterIP
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "${apache_metrics_port}"
+    ports:
+      - name: apache-metrics
+        port: ${apache_metrics_port}
+        targetPort: apache-metrics
+
+ingresses:
+  ${app_name}:
+    ingressClassName: ${ingress_class_name}
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+      nginx.ingress.kubernetes.io/proxy-body-size: "2048m"
+      #nginx.ingress.kubernetes.io/backend-protocol: "HTTP2"
+    hosts:
+      - paths:
+          - path: /
+            serviceName: ${app_name}
+            servicePort: 80
+        hostname: ${app_domain}
+    extraTls:
+      - hosts:
+          - ${app_domain}
+        secretName: ${tls_secret_name}
